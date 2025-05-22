@@ -2,10 +2,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { prisma } from "./prisma";
-
-if (!process.env.JWT_SECRET) {
-  console.error("ATTENTION: JWT_SECRET n'est pas défini dans les variables d'environnement");
-}
+import type { Role } from "@prisma/client";
+import type { AuthResult } from "@/types/authorization";
+//import { ASSIGNMENT_MANAGERS } from "@/types/authorization";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
@@ -35,110 +34,88 @@ export async function getUserIdFromToken(token: string): Promise<number | null> 
   }
 }
 
-export async function authenticate(req: NextRequest) {
-  const authHeader = req.headers.get("Authorization");
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Format d'authentification invalide",
-        detail: "Le token doit être au format 'Bearer <token>'",
-      },
-      { status: 401 }
-    );
-  }
-
-  const token = authHeader.split(" ")[1];
-
-  if (!token) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: "Authentification requise",
-        detail: "Le token d'authentification est manquant",
-      },
-      { status: 401 }
-    );
-  }
-
+export async function authenticate(req: NextRequest): Promise<NextResponse | AuthResult> {
   try {
+    const authHeader = req.headers.get("Authorization");
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Format d'authentification invalide",
+          detail: "Le token doit être au format 'Bearer <token>'",
+        },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
     const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
-
-    if (!decoded) {
+    
+    if (!decoded || !decoded.userId) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Token invalide",
-          detail: "Le token ne peut pas être décodé",
-        },
-        { status: 401 }
-      );
-    }
-
-    if (!decoded.userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Token invalide",
-          detail: "Le token ne contient pas d'identifiant utilisateur",
-        },
-        { status: 401 }
-      );
-    }
-
-    if (decoded.exp && Date.now() >= decoded.exp * 1000) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Token expiré",
-          detail: "Veuillez vous reconnecter",
-        },
+        { success: false, message: "Token invalide" },
         { status: 401 }
       );
     }
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { id: true, role: true },
+      select: { id: true, role: true }
     });
 
     if (!user) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Utilisateur non trouvé",
-          detail: "L'utilisateur associé au token n'existe plus",
-        },
+        { success: false, message: "Utilisateur non trouvé" },
         { status: 401 }
       );
     }
 
     return { userId: user.id, role: user.role };
+
   } catch (error) {
-    console.error("Erreur d'authentification:", error);
+    console.error("Erreur lors de l'authentification:", error);
     return NextResponse.json(
-      {
-        success: false,
-        message: "Session invalide ou expirée",
-        detail: "Veuillez vous reconnecter",
-      },
+      { success: false, message: "Erreur d'authentification" },
       { status: 401 }
     );
   }
 }
 
-export function restrictTo(role: string) {
-  return async (req: NextRequest) => {
+export async function restrictTo(req: NextRequest, ...allowedRoles: Role[]): Promise<NextResponse | null> {
+  try {
     const result = await authenticate(req);
     if (result instanceof NextResponse) return result;
 
-    if (result.role !== role) {
+    if (!allowedRoles.includes(result.role)) {
       return NextResponse.json(
-        { success: false, message: "Accès interdit" },
+        { 
+          success: false, 
+          message: "Accès refusé. Vous n'avez pas les permissions nécessaires." 
+        },
         { status: 403 }
       );
     }
     return null;
-  };
+  } catch (error) {
+    console.error("Erreur lors de la vérification des permissions:", error);
+    return NextResponse.json(
+      { success: false, message: "Erreur lors de la vérification des permissions" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function hasRole(userId: number, requiredRole: Role): Promise<boolean> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true }
+    });
+
+    return user?.role === requiredRole;
+  } catch (error) {
+    console.error("Erreur lors de la vérification du rôle:", error);
+    return false;
+  }
 }

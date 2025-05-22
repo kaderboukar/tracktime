@@ -6,31 +6,48 @@ import { Combobox, Transition } from "@headlessui/react";
 import { CheckIcon, ChevronUpDownIcon } from "@heroicons/react/20/solid";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Navbar from "@/components/Navbar";
-import { PlusIcon, PencilIcon, TrashIcon, UserGroupIcon, DocumentIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
 
-type FormData = {
+interface FormData {
   userId: number;
   projectId: number;
   allocationPercentage: number;
-};
+}
 
-type ProjectAssignment = {
-  projectId: number;
+interface UserProject {
+  project: { id: number; name: string; projectNumber: string };
   allocationPercentage: number;
-};
+  userId_projectId: string;
+}
 
-type Errors = Partial<Record<keyof FormData, string>>;
-type User = {
+interface User {
   id: number;
   name: string;
   indice: string;
-  projects: {
-    project: { id: number; name: string; projectNumber: string };
-    allocationPercentage: number;
-    userId_projectId: string;  // ajout de la clé composite
-  }[];
-};
-type Project = { id: number; name: string; projectNumber: string };
+  projects: UserProject[];
+}
+
+interface Project {
+  id: number;
+  name: string;
+  projectNumber: string;
+}
+
+interface ValidationResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    totalAllocation: number;
+    remainingAllocation: number;
+    existingAssignment?: {
+      project: {
+        name: string;
+        projectNumber: string;
+      };
+      allocationPercentage: number;
+    };
+  };
+}
 
 export default function UserAssignmentsPage() {
   const [formData, setFormData] = useState<FormData>({
@@ -38,21 +55,16 @@ export default function UserAssignmentsPage() {
     projectId: 0,
     allocationPercentage: 0,
   });
-  const [pendingAssignments, setPendingAssignments] = useState<ProjectAssignment[]>([]);
-  const [totalAllocation, setTotalAllocation] = useState(0);
-  const [editAssignment, setEditAssignment] = useState<{
-    userId: number;
-    projectId: number;
-  } | null>(null);
-  const [errors, setErrors] = useState<Errors>({});
-  const [message, setMessage] = useState<string>("");
+  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' }>({ text: '', type: 'success' });
   const [users, setUsers] = useState<User[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
   const [userQuery, setUserQuery] = useState("");
   const [projectQuery, setProjectQuery] = useState("");
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [validationInfo, setValidationInfo] = useState<ValidationResponse["data"]>();
 
   const filteredUsers = userQuery === ""
     ? users
@@ -76,8 +88,7 @@ export default function UserAssignmentsPage() {
   const fetchUsers = async () => {
     const token = localStorage.getItem("token");
     if (!token) {
-      console.error("Pas de token trouvé");
-      setMessage("Vous devez être connecté pour accéder à cette ressource");
+      setMessage({ text: "Vous devez être connecté pour accéder à cette ressource", type: 'error' });
       return;
     }
 
@@ -106,8 +117,7 @@ export default function UserAssignmentsPage() {
             });
 
             if (!projectsRes.ok) {
-              const errorData = await projectsRes.json();
-              console.error(`Erreur pour l'utilisateur ${user.id}:`, errorData);
+              console.error(`Erreur pour l'utilisateur ${user.id}`);
               return { ...user, projects: [] };
             }
 
@@ -122,8 +132,8 @@ export default function UserAssignmentsPage() {
 
       setUsers(usersWithProjects);
     } catch (error) {
-      console.error("Erreur lors de la récupération des données:", error);
-      setMessage("Erreur lors de la récupération des données des utilisateurs");
+      console.error("Erreur:", error);
+      setMessage({ text: "Erreur lors de la récupération des utilisateurs", type: 'error' });
     }
   };
 
@@ -145,614 +155,470 @@ export default function UserAssignmentsPage() {
       const data = await res.json();
       if (res.ok) setProjects(data);
     } catch (error) {
-      console.error("Erreur lors de la récupération des projets:", error);
+      console.error("Erreur:", error);
+      setMessage({ text: "Erreur lors de la récupération des projets", type: 'error' });
     }
+  };
+
+  const handleUserSelect = (user: User) => {
+    setSelectedUser(user);
+    setFormData(prev => ({ ...prev, userId: user.id }));
+    
+    // Calculer le total des assignations actuelles
+    const totalAllocation = user.projects.reduce(
+      (sum, p) => sum + p.allocationPercentage, 
+      0
+    );
+    
+    setValidationInfo({
+      totalAllocation,
+      remainingAllocation: 100 - totalAllocation
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
     
-    // Validation du pourcentage
+    if (!formData.userId || !formData.projectId || !formData.allocationPercentage) {
+      setErrors({
+        userId: !formData.userId ? "Veuillez sélectionner un utilisateur" : undefined,
+        projectId: !formData.projectId ? "Veuillez sélectionner un projet" : undefined,
+        allocationPercentage: !formData.allocationPercentage ? "Veuillez spécifier un pourcentage" : undefined,
+      });
+      return;
+    }
+
     if (formData.allocationPercentage <= 0 || formData.allocationPercentage > 100) {
       setErrors({
         allocationPercentage: "Le pourcentage doit être entre 1 et 100"
       });
       return;
     }
-  
-    if (formData.userId === 0 || formData.projectId === 0) {
-      setErrors({
-        userId: formData.userId === 0 ? "Veuillez sélectionner un utilisateur" : undefined,
-        projectId: formData.projectId === 0 ? "Veuillez sélectionner un projet" : undefined,
-      });
-      return;
-    }
-  
-    // Calcul du total des allocations en cours
-    const existingAssignments = users.find((u) => u.id === formData.userId)?.projects || [];
-    const currentTotalFromDB = existingAssignments
-      .filter((p) => !pendingAssignments.some(pa => pa.projectId === p.project.id))
-      .reduce((sum, p) => sum + p.allocationPercentage, 0);
-    
-    const pendingTotal = pendingAssignments.reduce((sum, p) => sum + p.allocationPercentage, 0);
-    const newTotal = currentTotalFromDB + pendingTotal + formData.allocationPercentage;
-    
-    if (newTotal > 100) {
-      setErrors({ 
-        allocationPercentage: `Le total des pourcentages (${newTotal}%) dépasse 100%` 
-      });
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setMessage({ text: "Vous devez être connecté pour effectuer cette action", type: 'error' });
       return;
     }
 
-    // Ajouter à la liste des assignations en attente
-    const newAssignment: ProjectAssignment = {
-      projectId: formData.projectId,
-      allocationPercentage: formData.allocationPercentage
-    };
-    
-    setPendingAssignments([...pendingAssignments, newAssignment]);
-    setTotalAllocation(newTotal);
+    try {
+      const res = await fetch(`/api/projects/${formData.projectId}/users`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          userId: formData.userId,
+          allocationPercentage: formData.allocationPercentage
+        })
+      });
 
-    // Si on atteint 100%, soumettre toutes les assignations
-    if (newTotal === 100) {
-      await submitAssignments();
-    } else {
-      // Réinitialiser le formulaire pour un nouveau projet
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMessage({ text: data.message, type: 'error' });
+        return;
+      }
+
+      // Mettre à jour l'interface utilisateur
+      setMessage({ text: "Assignation créée avec succès", type: 'success' });
+      setValidationInfo({
+        totalAllocation: data.data.totalAllocation,
+        remainingAllocation: 100 - data.data.totalAllocation
+      });
+
+      // Rafraîchir les données
+      await fetchUsers();
+      
+      // Réinitialiser le formulaire
       setFormData({
-        ...formData,
+        userId: selectedUser?.id || 0,
         projectId: 0,
         allocationPercentage: 0
       });
-      setErrors({});
-    }
-  };
-  const submitAssignments = async () => {
-    const token = localStorage.getItem("token");
-    
-    try {
-      // Soumettre toutes les assignations en parallèle
-      const assignmentPromises = pendingAssignments.map(assignment => {
-        const assignmentData = {
-          userId: formData.userId,
-          projectId: assignment.projectId,
-          allocationPercentage: assignment.allocationPercentage
-        };
-        
-        return fetch(`/api/projects/${assignment.projectId}/users`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(assignmentData),
-        });
-      });
 
-      const responses = await Promise.allSettled(assignmentPromises);
-      
-      // Vérifier s'il y a eu des erreurs
-      const errors = responses.filter(
-        (response): response is PromiseRejectedResult => response.status === 'rejected'
-      );
-      
-      if (errors.length > 0 || responses.some(r => r.status === 'fulfilled' && !r.value.ok)) {
-        throw new Error("Erreur lors de la création d'une ou plusieurs assignations");
-      }
-
-      setMessage("Assignations créées avec succès");
-      setErrors({});
-      setFormData({
-        userId: 0,
-        projectId: 0,
-        allocationPercentage: 0,
-      });
-      setPendingAssignments([]);
-      setTotalAllocation(0);
-      setIsModalOpen(false);
-      fetchUsers();
-    } catch (error: unknown) {
-      setMessage(`Erreur lors de la création des assignations: ${error instanceof Error ? error.message : 'Une erreur est survenue'}`);
-    }
-  };
-
-  const handleEdit = (userId: number, projectId: number) => {
-    const user = users.find((u) => u.id === userId);
-    const project = user?.projects.find((p) => p.project.id === projectId);
-    if (project) {
-      setEditAssignment({ userId, projectId });
-      setFormData({
-        userId,
-        projectId,
-        allocationPercentage: project.allocationPercentage,
-      });
-      setIsModalOpen(true);
+    } catch (error) {
+      console.error("Erreur:", error);
+      setMessage({ text: "Erreur lors de la création de l'assignation", type: 'error' });
     }
   };
 
   const handleDelete = async (userId: number, projectId: number) => {
-    const confirmed = window.confirm(
-      "Voulez-vous vraiment supprimer cette assignation ?"
-    );
-    if (!confirmed) return;
-
     const token = localStorage.getItem("token");
-    const res = await fetch(`/api/projects/${projectId}/users`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ userId }),
-    });
-    const data = await res.json();
+    if (!token) {
+      setMessage({ text: "Vous devez être connecté pour effectuer cette action", type: 'error' });
+      return;
+    }
 
-    if (res.ok) {
-      setMessage("Assignation supprimée");
-      fetchUsers();
-    } else {
-      setMessage(data.message);
+    if (!confirm("Êtes-vous sûr de vouloir supprimer cette assignation ?")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/users`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ userId })
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setMessage({ text: data.message || "Erreur lors de la suppression", type: 'error' });
+        return;
+      }
+
+      setMessage({ text: "Assignation supprimée avec succès", type: 'success' });
+      await fetchUsers();
+
+    } catch (error) {
+      console.error("Erreur:", error);
+      setMessage({ text: "Erreur lors de la suppression de l'assignation", type: 'error' });
     }
   };
 
-  const openCreateModal = () => {
-    setEditAssignment(null);
-    setFormData({
-      userId: 0,
-      projectId: 0,
-      allocationPercentage: 0,
-    });
-    setErrors({});
-    setMessage("");
-    setIsModalOpen(true);
-  };
-
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentUsers = users.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(users.length / itemsPerPage);
-
-  const handlePageChange = (pageNumber: number) => {
-    setCurrentPage(pageNumber);
-  };
+  // Pagination
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50">
+      <div className="min-h-screen bg-gray-100">
         <Navbar />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header */}
-          <div className="relative overflow-hidden bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 p-6 mb-8">
-            <div className="relative z-10 flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
-                  <UserGroupIcon className="w-6 h-6 text-white" />
-                </div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                  Gestion des Assignations
-                </h1>
+        <div className="container mx-auto px-4 py-8">
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 className="text-2xl font-semibold mb-4">Assignation des Projets aux Utilisateurs</h2>
+            
+            {message.text && (
+              <div className={`p-4 mb-4 rounded ${
+                message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              }`}>
+                {message.text}
               </div>
-              <button
-                onClick={openCreateModal}
-                className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl
-                         hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg
-                         transform hover:-translate-y-0.5"
-              >
-                <PlusIcon className="w-5 h-5 mr-2" />
-                Nouvelle Assignation
-              </button>
-            </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Sélection de l'utilisateur */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Utilisateur</label>
+                <Combobox value={selectedUser} onChange={handleUserSelect}>
+                  <div className="relative mt-1">
+                    <div className="relative w-full cursor-default overflow-hidden rounded-lg bg-white text-left border focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
+                      <Combobox.Input
+                        className="w-full border-none py-2 pl-3 pr-10 text-sm leading-5 text-gray-900 focus:ring-0"
+                        displayValue={(user: User) => user?.name || ''}
+                        onChange={(event) => setUserQuery(event.target.value)}
+                        placeholder="Sélectionner un utilisateur"
+                      />
+                      <Combobox.Button className="absolute inset-y-0 right-0 flex items-center pr-2">
+                        <ChevronUpDownIcon
+                          className="h-5 w-5 text-gray-400"
+                          aria-hidden="true"
+                        />
+                      </Combobox.Button>
+                    </div>
+                    <Transition
+                      as={Fragment}
+                      leave="transition ease-in duration-100"
+                      leaveFrom="opacity-100"
+                      leaveTo="opacity-0"
+                      afterLeave={() => setUserQuery('')}
+                    >
+                      <Combobox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                        {filteredUsers.length === 0 && userQuery !== '' ? (
+                          <div className="relative cursor-default select-none py-2 px-4 text-gray-700">
+                            Aucun utilisateur trouvé.
+                          </div>
+                        ) : (
+                          filteredUsers.map((user) => (
+                            <Combobox.Option
+                              key={user.id}
+                              className={({ active }) =>
+                                `relative cursor-default select-none py-2 pl-10 pr-4 ${
+                                  active ? 'bg-teal-600 text-white' : 'text-gray-900'
+                                }`
+                              }
+                              value={user}
+                            >
+                              {({ selected, active }) => (
+                                <>
+                                  <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                                    {user.name} ({user.indice})
+                                  </span>
+                                  {selected ? (
+                                    <span
+                                      className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
+                                        active ? 'text-white' : 'text-teal-600'
+                                      }`}
+                                    >
+                                      <CheckIcon className="h-5 w-5" aria-hidden="true" />
+                                    </span>
+                                  ) : null}
+                                </>
+                              )}
+                            </Combobox.Option>
+                          ))
+                        )}
+                      </Combobox.Options>
+                    </Transition>
+                  </div>
+                </Combobox>
+                {errors.userId && <p className="mt-1 text-sm text-red-600">{errors.userId}</p>}
+              </div>
+
+              {/* Sélection du projet */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Projet</label>
+                <Combobox
+                  value={projects.find(p => p.id === formData.projectId) || null}
+                  onChange={(project: Project) => setFormData(prev => ({ ...prev, projectId: project.id }))
+                  }
+                >
+                  <div className="relative mt-1">
+                    <div className="relative w-full cursor-default overflow-hidden rounded-lg bg-white text-left border focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
+                      <Combobox.Input
+                        className="w-full border-none py-2 pl-3 pr-10 text-sm leading-5 text-gray-900 focus:ring-0"
+                        displayValue={(project: Project) => project?.name || ''}
+                        onChange={(event) => setProjectQuery(event.target.value)}
+                        placeholder="Sélectionner un projet"
+                      />
+                      <Combobox.Button className="absolute inset-y-0 right-0 flex items-center pr-2">
+                        <ChevronUpDownIcon
+                          className="h-5 w-5 text-gray-400"
+                          aria-hidden="true"
+                        />
+                      </Combobox.Button>
+                    </div>
+                    <Transition
+                      as={Fragment}
+                      leave="transition ease-in duration-100"
+                      leaveFrom="opacity-100"
+                      leaveTo="opacity-0"
+                      afterLeave={() => setProjectQuery('')}
+                    >
+                      <Combobox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                        {filteredProjects.length === 0 && projectQuery !== '' ? (
+                          <div className="relative cursor-default select-none py-2 px-4 text-gray-700">
+                            Aucun projet trouvé.
+                          </div>
+                        ) : (
+                          filteredProjects.map((project) => (
+                            <Combobox.Option
+                              key={project.id}
+                              className={({ active }) =>
+                                `relative cursor-default select-none py-2 pl-10 pr-4 ${
+                                  active ? 'bg-teal-600 text-white' : 'text-gray-900'
+                                }`
+                              }
+                              value={project}
+                            >
+                              {({ selected, active }) => (
+                                <>
+                                  <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                                    {project.name} ({project.projectNumber})
+                                  </span>
+                                  {selected ? (
+                                    <span
+                                      className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
+                                        active ? 'text-white' : 'text-teal-600'
+                                      }`}
+                                    >
+                                      <CheckIcon className="h-5 w-5" aria-hidden="true" />
+                                    </span>
+                                  ) : null}
+                                </>
+                              )}
+                            </Combobox.Option>
+                          ))
+                        )}
+                      </Combobox.Options>
+                    </Transition>
+                  </div>
+                </Combobox>
+                {errors.projectId && <p className="mt-1 text-sm text-red-600">{errors.projectId}</p>}
+              </div>
+
+              {/* Pourcentage d'allocation */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700">                  Pourcentage d&apos;allocation
+                </label>
+                <input                  type="number"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-teal-500 focus:ring-teal-500 sm:text-sm"
+                  value={formData.allocationPercentage || ""}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    allocationPercentage: Number(e.target.value)
+                  }))}
+                  min="1"
+                  max="100"
+                />
+                {errors.allocationPercentage && (
+                  <p className="mt-1 text-sm text-red-600">{errors.allocationPercentage}</p>
+                )}
+                {validationInfo && (
+                  <div className="mt-2 text-sm">
+                    <p className="text-gray-600">
+                      Total actuel: {validationInfo.totalAllocation}%
+                    </p>
+                    <p className={`${validationInfo.remainingAllocation > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      Reste disponible: {validationInfo.remainingAllocation}%
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData({ userId: selectedUser?.id || 0, projectId: 0, allocationPercentage: 0 });
+                    setErrors({});
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Réinitialiser
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                >
+                  Assigner
+                </button>
+              </div>
+            </form>
           </div>
 
-          {message && (
-            <div 
-              className={`mb-6 p-4 rounded-xl message-container
-                ${message.includes("créée") || message.includes("mise à jour") || message.includes("supprimée")
-                  ? "bg-green-50 border border-green-200 text-green-600" 
-                  : "bg-red-50 border border-red-200 text-red-600"
-                }`}
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm">{message}</p>
-                <div className="w-20 h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-current message-progress" />
-                </div>
-              </div>
+          {/* Liste des utilisateurs et leurs assignations */}
+          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-medium">Liste des Assignations</h3>
             </div>
-          )}
-
-          {/* Users List */}
-          <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 overflow-hidden">
+            
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="px-6 py-4 text-left">
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Utilisateur
-                      </span>
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Utilisateur
                     </th>
-                    <th className="px-6 py-4 text-left">
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Projets assignés
-                      </span>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Projets assignés
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Total
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {currentUsers.map((user) => (
-                    <tr key={user.id} className="group hover:bg-gray-50/50 transition-colors duration-200">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center space-x-3">
-                          <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
-                            <UserGroupIcon className="w-4 h-4 text-white" />
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {paginatedUsers.map((user) => {
+                    const totalAllocation = user.projects.reduce(
+                      (sum, p) => sum + p.allocationPercentage,
+                      0
+                    );
+                    
+                    return (
+                      <tr key={user.id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {user.name}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {user.indice}
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                            <p className="text-xs text-gray-500">{user.indice}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {user.projects.length > 0 ? (
+                        </td>
+                        <td className="px-6 py-4">
                           <div className="space-y-2">
                             {user.projects.map((assignment) => (
-                              <div
+                              <div 
                                 key={assignment.userId_projectId}
-                                className="flex items-center justify-between p-2 rounded-lg bg-gray-50 group-hover:bg-white transition-colors duration-200"
+                                className="flex items-center justify-between text-sm"
                               >
-                                <div className="flex items-center space-x-3">
-                                  <DocumentIcon className="w-4 h-4 text-gray-400" />
-                                  <div>
-                                    <p className="text-sm font-medium text-gray-900">
-                                      {assignment.project.name}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                      {assignment.project.projectNumber}
-                                    </p>
-                                  </div>
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                                <span className="font-medium text-gray-900">
+                                  {assignment.project.name}
+                                </span>
+                                <div className="flex items-center space-x-2">
+                                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                    totalAllocation === 100 
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-yellow-100 text-yellow-800'
+                                  }`}>
                                     {assignment.allocationPercentage}%
                                   </span>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <button
-                                    onClick={() => handleEdit(user.id, assignment.project.id)}
-                                    className="p-1 text-blue-600 hover:text-blue-700 transition-colors"
-                                    title="Edit assignment"
-                                  >
-                                    <PencilIcon className="w-4 h-4" />
-                                  </button>
                                   <button
                                     onClick={() => handleDelete(user.id, assignment.project.id)}
-                                    className="p-1 text-red-600 hover:text-red-700 transition-colors"
-                                    title="Delete assignment"
+                                    className="text-red-600 hover:text-red-900"
                                   >
-                                    <TrashIcon className="w-4 h-4" />
+                                    <TrashIcon className="h-4 w-4" />
                                   </button>
                                 </div>
                               </div>
                             ))}
                           </div>
-                        ) : (
-                          <span className="text-sm text-gray-500">Aucun projet assigné</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            totalAllocation === 100 
+                              ? 'bg-green-100 text-green-800'
+                              : totalAllocation > 100
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {totalAllocation}%
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                          <button
+                            onClick={() => handleUserSelect(user)}
+                            className="text-teal-600 hover:text-teal-900"
+                          >
+                            <PlusIcon className="h-5 w-5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-600">
-                  Affichage de {indexOfFirstItem + 1} à{" "}
-                  {Math.min(indexOfLastItem, users.length)} sur {users.length} utilisateurs
-                </p>
-                <div className="flex space-x-2">
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                <div className="flex-1 flex justify-between items-center">
                   <button
-                    key="prev"
-                    onClick={() => handlePageChange(currentPage - 1)}
+                    onClick={() => setCurrentPage(page => Math.max(page - 1, 1))}
                     disabled={currentPage === 1}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200
-                            ${currentPage === 1
-                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                        : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
-                      }`}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-500"
                   >
                     Précédent
                   </button>
-                  {Array.from({ length: totalPages }, (_, index) => (
-                    <button
-                      key={`page-${index + 1}`}
-                      onClick={() => handlePageChange(index + 1)}
-                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200
-                              ${currentPage === index + 1
-                          ? "bg-blue-600 text-white"
-                          : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
-                        }`}
-                    >
-                      {index + 1}
-                    </button>
-                  ))}
+                  <span className="text-sm text-gray-700">
+                    Page {currentPage} sur {totalPages}
+                  </span>
                   <button
-                    key="next"
-                    onClick={() => handlePageChange(currentPage + 1)}
+                    onClick={() => setCurrentPage(page => Math.min(page + 1, totalPages))}
                     disabled={currentPage === totalPages}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200
-                            ${currentPage === totalPages
-                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                        : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
-                      }`}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-500"
                   >
                     Suivant
                   </button>
                 </div>
               </div>
-            </div>
+            )}
           </div>
-
-          {/* Modal */}
-          {isModalOpen && (
-            <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex justify-center items-center z-50 transition-all duration-300 p-4 overflow-y-auto">
-              <div className="relative w-full max-w-md mx-auto bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl 
-                          transform transition-all duration-300 ease-out scale-100 opacity-100 border border-white/20
-                          sm:p-8 p-4">
-                {/* Modal Content */}
-                <div className="mb-6 sm:mb-8">
-                  <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                    {editAssignment ? "Modifier l'assignation" : "Nouvelle assignation"}
-                  </h2>
-                  <p className="text-gray-500 mt-2 text-sm">
-                    {editAssignment 
-                      ? "Modifiez les informations de l'assignation" 
-                      : "Remplissez les informations pour créer une nouvelle assignation"}
-                  </p>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-                  <div className="space-y-4">
-                    {/* Liste des assignations en cours */}
-                    {pendingAssignments.length > 0 && (
-                      <div className="space-y-2">
-                        <h3 className="text-sm font-medium text-gray-700">Assignations en cours</h3>
-                        <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-                          {pendingAssignments.map((assignment, index) => {
-                            const project = projects.find(p => p.id === assignment.projectId);
-                            return (
-                              <div key={index} className="flex justify-between items-center text-sm">
-                                <span>{project?.name}</span>
-                                <span className="font-medium">{assignment.allocationPercentage}%</span>
-                              </div>
-                            );
-                          })}
-                          <div className="border-t border-gray-200 mt-2 pt-2 flex justify-between items-center">
-                            <span className="font-medium">Total</span>
-                            <span className="font-medium text-blue-600">{totalAllocation}%</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Champs du formulaire */}
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-gray-700">Utilisateur</label>
-                      <Combobox
-                        value={users.find(u => u.id === formData.userId) || null}
-                        onChange={(user) => {
-                          setFormData({ ...formData, userId: user?.id || 0 });
-                          setPendingAssignments([]);
-                          setTotalAllocation(0);
-                        }}
-                        disabled={pendingAssignments.length > 0}
-                      >
-                        <div className="relative mt-1">
-                          <div className="relative w-full cursor-default overflow-hidden rounded-xl bg-white text-left border border-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2">
-                            <Combobox.Input
-                              className="w-full border-none py-2.5 pl-3 pr-10 text-sm leading-5 text-gray-900 focus:ring-0"
-                              displayValue={(user: User) => user?.name || ""}
-                              onChange={(event) => setUserQuery(event.target.value)}
-                              placeholder="Rechercher un utilisateur..."
-                            />
-                            <Combobox.Button className="absolute inset-y-0 right-0 flex items-center px-2">
-                              <ChevronUpDownIcon
-                                className="h-5 w-5 text-gray-400"
-                                aria-hidden="true"
-                              />
-                            </Combobox.Button>
-                          </div>
-                          <Transition
-                            as={Fragment}
-                            leave="transition ease-in duration-100"
-                            leaveFrom="opacity-100"
-                            leaveTo="opacity-0"
-                            afterLeave={() => setUserQuery("")}
-                          >
-                            <Combobox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-                              {filteredUsers.length === 0 && userQuery !== "" ? (
-                                <div className="relative cursor-default select-none py-2 px-4 text-gray-700">
-                                  Aucun utilisateur trouvé.
-                                </div>
-                              ) : (
-                                filteredUsers.map((user) => (
-                                  <Combobox.Option
-                                    key={user.id}
-                                    className={({ active }) =>
-                                      `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                                        active ? 'bg-blue-600 text-white' : 'text-gray-900'
-                                      }`
-                                    }
-                                    value={user}
-                                  >
-                                    {({ selected, active }) => (
-                                      <>
-                                        <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
-                                          {user.name} ({user.indice})
-                                        </span>
-                                        {selected ? (
-                                          <span
-                                            className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
-                                              active ? 'text-white' : 'text-blue-600'
-                                            }`}
-                                          >
-                                            <CheckIcon className="h-5 w-5" aria-hidden="true" />
-                                          </span>
-                                        ) : null}
-                                      </>
-                                    )}
-                                  </Combobox.Option>
-                                ))
-                              )}
-                            </Combobox.Options>
-                          </Transition>
-                        </div>
-                      </Combobox>
-                      {errors.userId && (
-                        <p className="text-red-500 text-sm mt-1">{errors.userId}</p>
-                      )}
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-gray-700">Projet</label>
-                      <Combobox
-                        value={projects.find(p => p.id === formData.projectId) || null}
-                        onChange={(project) => setFormData({ ...formData, projectId: project?.id || 0 })}
-                      >
-                        <div className="relative mt-1">
-                          <div className="relative w-full cursor-default overflow-hidden rounded-xl bg-white text-left border border-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2">
-                            <Combobox.Input
-                              className="w-full border-none py-2.5 pl-3 pr-10 text-sm leading-5 text-gray-900 focus:ring-0"
-                              displayValue={(project: Project) => project?.name || ""}
-                              onChange={(event) => setProjectQuery(event.target.value)}
-                              placeholder="Rechercher un projet..."
-                            />
-                            <Combobox.Button className="absolute inset-y-0 right-0 flex items-center px-2">
-                              <ChevronUpDownIcon
-                                className="h-5 w-5 text-gray-400"
-                                aria-hidden="true"
-                              />
-                            </Combobox.Button>
-                          </div>
-                          <Transition
-                            as={Fragment}
-                            leave="transition ease-in duration-100"
-                            leaveFrom="opacity-100"
-                            leaveTo="opacity-0"
-                            afterLeave={() => setProjectQuery("")}
-                          >
-                            <Combobox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-                              {filteredProjects.length === 0 && projectQuery !== "" ? (
-                                <div className="relative cursor-default select-none py-2 px-4 text-gray-700">
-                                  Aucun projet trouvé.
-                                </div>
-                              ) : (
-                                filteredProjects.map((project) => (
-                                  <Combobox.Option
-                                    key={project.id}
-                                    className={({ active }) =>
-                                      `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                                        active ? 'bg-blue-600 text-white' : 'text-gray-900'
-                                      }`
-                                    }
-                                    value={project}
-                                  >
-                                    {({ selected, active }) => (
-                                      <>
-                                        <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
-                                          {project.name} ({project.projectNumber})
-                                        </span>
-                                        {selected ? (
-                                          <span
-                                            className={`absolute inset-y-0 left-0 flex items-center pl-3 ${
-                                              active ? 'text-white' : 'text-blue-600'
-                                            }`}
-                                          >
-                                            <CheckIcon className="h-5 w-5" aria-hidden="true" />
-                                          </span>
-                                        ) : null}
-                                      </>
-                                    )}
-                                  </Combobox.Option>
-                                ))
-                              )}
-                            </Combobox.Options>
-                          </Transition>
-                        </div>
-                      </Combobox>
-                      {errors.projectId && (
-                        <p className="text-red-500 text-sm mt-1">{errors.projectId}</p>
-                      )}
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-gray-700">
-                        Pourcentage d&#39;allocation
-                        <span className="text-red-500 ml-1">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="100"
-                        step="1"
-                        required
-                        placeholder="Pourcentage d'allocation (1-100)"
-                        value={formData.allocationPercentage || ""}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            allocationPercentage: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)),
-                          })
-                        }
-                        className="w-full p-2.5 sm:p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 
-                                 focus:ring-blue-500/40 focus:border-blue-500 transition-all duration-200 
-                                 bg-white/50 backdrop-blur-sm text-sm sm:text-base"
-                      />
-                      {errors.allocationPercentage && (
-                        <p className="text-red-500 text-sm mt-1">
-                          {errors.allocationPercentage}
-                        </p>
-                      )}
-                      <p className="text-xs text-gray-500 mt-1">
-                        Le pourcentage doit être compris entre 1 et 100
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Buttons container */}
-                  <div className="flex flex-col-reverse sm:flex-row justify-end space-y-4 sm:space-y-0 sm:space-x-3 
-                              mt-6 sm:mt-8 pt-4 border-t border-gray-100">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsModalOpen(false);
-                        setPendingAssignments([]);
-                        setTotalAllocation(0);
-                      }}
-                      className="w-full sm:w-auto px-4 sm:px-6 py-2.5 rounded-xl border border-gray-300 
-                               text-gray-700 hover:bg-gray-50 transition-all duration-200 text-sm sm:text-base"
-                    >
-                      Annuler
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={!formData.userId || !formData.projectId || !formData.allocationPercentage}
-                      className={`w-full sm:w-auto px-4 sm:px-6 py-2.5 rounded-xl transition-all duration-200 
-                               text-sm sm:text-base ${
-                                 totalAllocation === 100
-                                   ? "bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800"
-                                   : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700"
-                               } ${
-                                 (!formData.userId || !formData.projectId || !formData.allocationPercentage)
-                                   ? "opacity-50 cursor-not-allowed"
-                                   : "shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
-                               }`}
-                    >
-                      {totalAllocation === 100 ? "Terminer les assignations" : "Ajouter le projet"}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </ProtectedRoute>

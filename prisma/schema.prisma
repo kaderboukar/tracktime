@@ -45,9 +45,9 @@ model UserProject {
   projectId            Int
   assignedAt           DateTime @default(now())
   updatedAt            DateTime @updatedAt
-  allocationPercentage Float // Pourcentage d'allocation sur le projet
-  user                 User     @relation(fields: [userId], references: [id])
-  project              Project  @relation(fields: [projectId], references: [id])
+  allocationPercentage Float    // Pourcentage d'allocation sur le projet
+  user                User     @relation(fields: [userId], references: [id])
+  project             Project  @relation(fields: [projectId], references: [id])
 
   @@id([userId, projectId])
 }
@@ -148,4 +148,5 @@ enum ValidationStatus {
   REJECTED
   REVISED
 }
+
 
