@@ -1,0 +1,3 @@
+email,password,name,indice,grade,type,role,year1,cost1,year2,cost2
+john.doe@undp.org,123456,John Doe,IND001,Grade A,OPERATION,STAFF,2025,50000,2026,52000
+jane.smith@undp.org,123456,Jane Smith,IND002,Grade B,PROGRAMME,PMSU,2025,45000,2026,47000
