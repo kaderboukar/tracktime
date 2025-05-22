@@ -1,20 +1,18 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { authenticate } from "@/lib/auth";
 import { type NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Token manquant" }, { status: 401 });
+    const authResult = await authenticate(request);
+
+    // Si authResult est une instance de NextResponse, cela signifie qu'il y a une erreur d'authentification
+    if (authResult instanceof NextResponse) {
+      return authResult;
     }
 
-    const token = authHeader.split(" ")[1];
-    const userId = await verifyToken(token);
-    if (!userId) {
-      return NextResponse.json({ error: "Token invalide" }, { status: 401 });
-    }
+    const { userId } = authResult;
 
     const assignments = await prisma.userProject.findMany({
       where: {

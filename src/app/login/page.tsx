@@ -40,11 +40,11 @@ export default function LoginPage() {
     });
     const data = await res.json();
 
-    if (res.ok) {
-      localStorage.setItem("token", data.token);
+    if (res.ok && data.success) {
+      localStorage.setItem("token", data.data.token);
       router.push("/");
     } else {
-      setMessage(data.message);
+      setMessage(data.message || "Une erreur est survenue lors de la connexion");
     }
   };
 

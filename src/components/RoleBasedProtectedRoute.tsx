@@ -47,26 +47,23 @@ export default function RoleBasedProtectedRoute({
           headers: {
             Authorization: `Bearer ${token}`,
           },
-          credentials: "include",
         });
 
         const data = await response.json();
 
         if (!response.ok || !data.success) {
-          console.log("Réponse non valide de /api/auth/me:", data.message);
+          console.log("Erreur de vérification du token, redirection vers /login");
           localStorage.removeItem("token");
           router.push("/login");
           return;
         }
 
-        const userRole = data.data.role;
-        if (!allowedRoles.includes(userRole)) {
-          console.log("Rôle non autorisé, redirection vers /unauthorized");
+        if (!allowedRoles.includes(data.data.role)) {
           router.push("/unauthorized");
-          return;
+          setIsAuthorized(false);
+        } else {
+          setIsAuthorized(true);
         }
-
-        setIsAuthorized(true);
       } catch (error) {
         console.error("Erreur lors de la vérification de l'authentification:", error);
         localStorage.removeItem("token");
@@ -77,24 +74,15 @@ export default function RoleBasedProtectedRoute({
     };
 
     checkAuth();
-
-    // Mettre en place un intervalle pour vérifier périodiquement l'authentification
-    const interval = setInterval(checkAuth, 5 * 60 * 1000); // Vérifier toutes les 5 minutes
-
-    return () => clearInterval(interval);
-  }, [router, allowedRoles]);
+  }, [allowedRoles, router]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600"></div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
-  if (!isAuthorized) {
-    return null;
-  }
-
-  return <>{children}</>;
+  return isAuthorized ? <>{children}</> : null;
 }

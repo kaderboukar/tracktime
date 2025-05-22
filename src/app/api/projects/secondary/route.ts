@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from "@prisma/client";
-import { verifyToken } from '@/lib/auth';
+import { prisma } from "@/lib/prisma";
+import { authenticate } from '@/lib/auth';
 import { type NextRequest } from 'next/server';
-
-const prisma = new PrismaClient();
 
 export async function GET(
   request: NextRequest
@@ -15,7 +13,7 @@ export async function GET(
     }
 
     const token = authHeader.split(' ')[1];
-    const verifiedUserId = await verifyToken(token);
+    const verifiedUserId = await authenticate(token);
     if (!verifiedUserId) {
       return NextResponse.json({ error: 'Token invalide' }, { status: 401 });
     }
@@ -52,7 +50,5 @@ export async function GET(
       { error: 'Erreur lors de la récupération des projets' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }

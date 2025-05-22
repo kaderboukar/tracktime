@@ -1,11 +1,9 @@
 // app/api/projects/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient, staffAccess } from "@prisma/client";  // Ajouter staffAccess
+import { staffAccess } from "@prisma/client";  // Garder uniquement le type
 import { authenticate } from "@/lib/auth";
 import { projectSchema } from "@/lib/validation";
-import { z } from "zod";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   const authResult = authenticate(req);

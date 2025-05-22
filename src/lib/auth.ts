@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import jwt from "jsonwebtoken";
 import { prisma } from "./prisma";
 
+if (!process.env.JWT_SECRET) {
+  console.error("ATTENTION: JWT_SECRET n'est pas défini dans les variables d'environnement");
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
 export async function getUserIdFromToken(token: string): Promise<number | null> {
@@ -33,7 +37,19 @@ export async function getUserIdFromToken(token: string): Promise<number | null> 
 
 export async function authenticate(req: NextRequest) {
   const authHeader = req.headers.get("Authorization");
-  const token = authHeader?.replace("Bearer ", "");
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Format d'authentification invalide",
+        detail: "Le token doit être au format 'Bearer <token>'",
+      },
+      { status: 401 }
+    );
+  }
+
+  const token = authHeader.split(" ")[1];
 
   if (!token) {
     return NextResponse.json(
@@ -49,12 +65,34 @@ export async function authenticate(req: NextRequest) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as jwt.JwtPayload;
 
-    if (!decoded || !decoded.userId) {
+    if (!decoded) {
       return NextResponse.json(
         {
           success: false,
           message: "Token invalide",
-          detail: "Le token ne contient pas les informations requises",
+          detail: "Le token ne peut pas être décodé",
+        },
+        { status: 401 }
+      );
+    }
+
+    if (!decoded.userId) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Token invalide",
+          detail: "Le token ne contient pas d'identifiant utilisateur",
+        },
+        { status: 401 }
+      );
+    }
+
+    if (decoded.exp && Date.now() >= decoded.exp * 1000) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Token expiré",
+          detail: "Veuillez vous reconnecter",
         },
         { status: 401 }
       );

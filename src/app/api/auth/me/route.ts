@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticate, getUserIdFromToken } from "@/lib/auth";
+import { getUserIdFromToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
         role: true,
         indice: true,
         grade: true,
-        proformaCost: true,
+        proformaCosts: true,
       },
     });
 
@@ -50,10 +50,6 @@ export async function GET(req: NextRequest) {
       {
         success: false,
         message: "Erreur d'authentification",
-        error:
-          process.env.NODE_ENV === "development"
-            ? (error as Error).message
-            : undefined,
       },
       { status: 401 }
     );

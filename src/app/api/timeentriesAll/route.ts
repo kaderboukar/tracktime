@@ -1,25 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-import { verifyToken } from "@/lib/auth";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
+import { authenticate } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json(
-        { success: false, message: "Token manquant" },
-        { status: 401 }
-      );
+    const authResult = await authenticate(request);
+
+    // Si authResult est une instance de NextResponse, cela signifie qu'il y a une erreur d'authentification
+    if (authResult instanceof NextResponse) {
+      return authResult;
     }
 
-    const token = authHeader.split(" ")[1];
-    const userId = await verifyToken(token);
-    if (!userId) {
+    const { userId, role } = authResult;
+
+    // Vérification supplémentaire pour s'assurer que seuls les administrateurs peuvent voir toutes les entrées
+    if (role !== "ADMIN") {
       return NextResponse.json(
-        { success: false, message: "Token invalide" },
-        { status: 401 }
+        {
+          success: false,
+          message:
+            "Accès non autorisé. Seuls les administrateurs peuvent voir toutes les entrées de temps.",
+        },
+        { status: 403 }
       );
     }
 
@@ -55,12 +57,15 @@ export async function GET(request: NextRequest) {
       data: timeEntries,
     });
   } catch (error) {
-    console.error("Erreur dans /api/time-entries:", error);
+    console.error("Erreur dans /api/timeentriesAll:", error);
     return NextResponse.json(
       {
         success: false,
         message: "Erreur serveur",
-        error: process.env.NODE_ENV === "development" ? error : undefined,
+        error:
+          process.env.NODE_ENV === "development"
+            ? (error as Error).message
+            : undefined,
       },
       { status: 500 }
     );
