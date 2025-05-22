@@ -1,35 +1,34 @@
-import { NextResponse } from "next/server";
-import {prisma} from "@/lib/prisma";
-import { getToken } from "@/lib/auth";
+import { NextResponse, NextRequest } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { authenticate } from "@/lib/auth";
 import { MAX_HOURS_PER_SEMESTER } from "@/lib/constants";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const token = await getToken(request);
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Non autorisé" },
-        { status: 401 }
-      );
+    const authResult = await authenticate(request);
+    if (authResult instanceof NextResponse) {
+      return authResult;
     }
 
-    const url = new URL(request.url);
-    const userId = url.searchParams.get("userId");
-    const semester = url.searchParams.get("semester");
-    const year = url.searchParams.get("year");
+    const { userId } = authResult;
 
-    if (!userId || !semester || !year) {
+    // Récupérer le semestre et l'année actuels ou depuis les paramètres de requête
+    const searchParams = new URL(request.url).searchParams;
+    const semester = searchParams.get('semester');
+    const year = searchParams.get('year');
+
+    if (!semester || !year) {
       return NextResponse.json(
-        { success: false, message: "Paramètres manquants" },
+        { success: false, message: "Semestre et année requis" },
         { status: 400 }
       );
     }
 
-    // Calculer le total des heures pour l'utilisateur dans le semestre spécifié
+    // Calculer les heures déjà saisies pour ce semestre
     const totalHours = await prisma.timeEntry.aggregate({
       where: {
-        userId: parseInt(userId),
-        semester: semester as "S1" | "S2",
+        userId,
+        semester: parseInt(semester),
         year: parseInt(year),
       },
       _sum: {
@@ -38,17 +37,24 @@ export async function GET(request: Request) {
     });
 
     const usedHours = totalHours._sum.hours || 0;
-    const remainingHours = Math.max(0, MAX_HOURS_PER_SEMESTER - usedHours);
+    const remainingHours = MAX_HOURS_PER_SEMESTER - usedHours;
 
     return NextResponse.json({
       success: true,
-      remainingHours,
-      totalHours: usedHours,
+      data: {
+        maxHours: MAX_HOURS_PER_SEMESTER,
+        usedHours,
+        remainingHours,
+      },
     });
   } catch (error) {
-    console.error("Erreur lors du calcul des heures restantes:", error);
+    console.error("Erreur dans /api/time-entries/remaining:", error);
     return NextResponse.json(
-      { success: false, message: "Erreur serveur" },
+      {
+        success: false,
+        message: "Erreur serveur",
+        error: process.env.NODE_ENV === "development" ? (error as Error).message : undefined,
+      },
       { status: 500 }
     );
   }

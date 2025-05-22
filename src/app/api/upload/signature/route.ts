@@ -5,16 +5,31 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(req: NextRequest) {
-  const authResult = authenticate(req);
-  if (authResult instanceof NextResponse) return authResult;
-
   try {
+    const authResult = await authenticate(req);
+    if (authResult instanceof NextResponse) {
+      return authResult;
+    }
+
+    const { userId, role } = authResult;
+
+    // Vérifier si l'utilisateur a les droits nécessaires
+    if (role !== 'ADMIN' && role !== 'PMSU') {
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: "Accès non autorisé. Vous devez être administrateur ou PMSU pour télécharger des signatures." 
+        },
+        { status: 403 }
+      );
+    }
+
     const formData = await req.formData();
     const file = formData.get('signature') as File;
     
     if (!file) {
       return NextResponse.json(
-        { message: 'Aucun fichier fourni' },
+        { success: false, message: 'Aucun fichier fourni' },
         { status: 400 }
       );
     }

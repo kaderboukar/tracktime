@@ -1,34 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import {prisma} from "@/lib/prisma";
-import { verifyToken } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { authenticate } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.headers.get('Authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Non autorisé" },
-        { status: 401 }
-      );
-    }
-    
-    const userId = await verifyToken(token);
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, message: "Token invalide" },
-        { status: 401 }
-      );
+    const authResult = await authenticate(request);
+    if (authResult instanceof NextResponse) {
+      return authResult;
     }
 
-    // Récupérer toutes les entrées de temps avec les relations
+    const { userId } = authResult;
+
     const timeEntries = await prisma.timeEntry.findMany({
+      where: {
+        userId
+      },
       include: {
         user: {
           select: {
             name: true,
             indice: true,
             grade: true,
-            proformaCost: true,
+            proformaCosts: true,
           },
         },
         project: {
@@ -42,81 +35,52 @@ export async function GET(request: NextRequest) {
             name: true,
           },
         },
-        validationHistory: {
-          include: {
-            validator: {
-              select: {
-                name: true,
-                indice: true,
-              },
-            },
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
       },
     });
 
-    return NextResponse.json({ success: true, data: timeEntries });
+    return NextResponse.json({
+      success: true,
+      data: timeEntries,
+    });
   } catch (error) {
-    console.error("Erreur lors de la récupération des entrées de temps:", error);
+    console.error("Erreur dans /api/time-entries:", error);
     return NextResponse.json(
-      { success: false, message: "Erreur serveur" },
+      {
+        success: false,
+        message: "Erreur serveur",
+        error: process.env.NODE_ENV === "development" ? (error as Error).message : undefined,
+      },
       { status: 500 }
     );
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const token = await getToken(request);
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Non autorisé" },
-        { status: 401 }
-      );
+    const authResult = await authenticate(request);
+    if (authResult instanceof NextResponse) {
+      return authResult;
     }
 
+    const { userId: authenticatedUserId } = authResult;
     const data = await request.json();
-    const { userId, projectId, activityId, hours, semester, year, comment } = data;
-
-    // Vérification des données requises
-    if (!userId || !projectId || !activityId || !hours || !semester || !year) {
+    
+    if (!data.userId || data.userId !== authenticatedUserId) {
       return NextResponse.json(
-        { success: false, message: "Données manquantes" },
-        { status: 400 }
+        { success: false, message: "Vous ne pouvez créer des entrées que pour vous-même" },
+        { status: 403 }
       );
     }
 
-    // Vérification de l'existence de l'utilisateur, du projet et de l'activité
-    const [user, project, activity] = await Promise.all([
-      prisma.user.findUnique({ where: { id: userId } }),
-      prisma.project.findUnique({ where: { id: projectId } }),
-      prisma.activity.findUnique({ where: { id: activityId } }),
-    ]);
-
-    if (!user || !project || !activity) {
-      return NextResponse.json(
-        { success: false, message: "Données invalides" },
-        { status: 400 }
-      );
-    }
-
-    // Création de l'entrée de temps
     const timeEntry = await prisma.timeEntry.create({
       data: {
-        userId,
-        projectId,
-        activityId,
-        hours,
-        semester,
-        year,
-        comment,
-        status: 'PENDING',
+        userId: data.userId,
+        projectId: data.projectId,
+        activityId: data.activityId,
+        hours: data.hours,
+        semester: data.semester,
+        year: data.year,
+        comment: data.comment || undefined,
       },
       include: {
         user: {
@@ -139,28 +103,34 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ success: true, data: timeEntry });
+    return NextResponse.json({
+      success: true,
+      data: timeEntry,
+    });
+
   } catch (error) {
-    console.error("Erreur lors de la création de l'entrée de temps:", error);
+    console.error("Erreur dans /api/time-entries:", error);
     return NextResponse.json(
-      { success: false, message: "Erreur serveur" },
+      {
+        success: false,
+        message: "Erreur serveur",
+        error: process.env.NODE_ENV === "development" ? (error as Error).message : undefined,
+      },
       { status: 500 }
     );
   }
 }
 
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
-    const token = await getToken(request);
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Non autorisé" },
-        { status: 401 }
-      );
+    const authResult = await authenticate(request);
+    if (authResult instanceof NextResponse) {
+      return authResult;
     }
 
+    const { userId: authenticatedUserId, role } = authResult;
     const data = await request.json();
-    const { id, status, ...updateData } = data;
+    const { id, ...updateData } = data;
 
     if (!id) {
       return NextResponse.json(
@@ -169,9 +139,10 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Vérifier si l'entrée existe
+    // Vérifier si l'entrée existe et appartient à l'utilisateur
     const existingEntry = await prisma.timeEntry.findUnique({
       where: { id },
+      select: { userId: true },
     });
 
     if (!existingEntry) {
@@ -181,25 +152,17 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Si un nouveau statut est fourni, créer un historique de validation
-    if (status && status !== existingEntry.status) {
-      await prisma.validationHistory.create({
-        data: {
-          timeEntryId: id,
-          status,
-          validatorId: token.userId,
-          comment: data.comment,
-        },
-      });
+    // Vérifier que l'utilisateur modifie sa propre entrée ou est admin
+    if (existingEntry.userId !== authenticatedUserId && role !== "ADMIN") {
+      return NextResponse.json(
+        { success: false, message: "Vous ne pouvez modifier que vos propres entrées" },
+        { status: 403 }
+      );
     }
 
-    // Mise à jour de l'entrée
     const updatedEntry = await prisma.timeEntry.update({
       where: { id },
-      data: {
-        ...updateData,
-        ...(status && { status }),
-      },
+      data: updateData,
       include: {
         user: {
           select: {
@@ -218,44 +181,37 @@ export async function PUT(request: Request) {
             name: true,
           },
         },
-        validationHistory: {
-          include: {
-            validator: {
-              select: {
-                name: true,
-                indice: true,
-              },
-            },
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-        },
       },
     });
 
-    return NextResponse.json({ success: true, data: updatedEntry });
+    return NextResponse.json({
+      success: true,
+      data: updatedEntry,
+    });
+
   } catch (error) {
-    console.error("Erreur lors de la mise à jour de l'entrée de temps:", error);
+    console.error("Erreur dans /api/time-entries:", error);
     return NextResponse.json(
-      { success: false, message: "Erreur serveur" },
+      {
+        success: false,
+        message: "Erreur serveur",
+        error: process.env.NODE_ENV === "development" ? (error as Error).message : undefined,
+      },
       { status: 500 }
     );
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
-    const token = await getToken(request);
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Non autorisé" },
-        { status: 401 }
-      );
+    const authResult = await authenticate(request);
+    if (authResult instanceof NextResponse) {
+      return authResult;
     }
 
-    const data = await request.json();
-    const { id } = data;
+    const { userId: authenticatedUserId, role } = authResult;
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
 
     if (!id) {
       return NextResponse.json(
@@ -264,9 +220,10 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Vérifier si l'entrée existe
+    // Vérifier si l'entrée existe et appartient à l'utilisateur
     const existingEntry = await prisma.timeEntry.findUnique({
-      where: { id },
+      where: { id: parseInt(id) },
+      select: { userId: true },
     });
 
     if (!existingEntry) {
@@ -276,21 +233,31 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Supprimer l'entrée et son historique de validation
-    await prisma.$transaction([
-      prisma.validationHistory.deleteMany({
-        where: { timeEntryId: id },
-      }),
-      prisma.timeEntry.delete({
-        where: { id },
-      }),
-    ]);
+    // Vérifier que l'utilisateur supprime sa propre entrée ou est admin
+    if (existingEntry.userId !== authenticatedUserId && role !== "ADMIN") {
+      return NextResponse.json(
+        { success: false, message: "Vous ne pouvez supprimer que vos propres entrées" },
+        { status: 403 }
+      );
+    }
 
-    return NextResponse.json({ success: true });
+    await prisma.timeEntry.delete({
+      where: { id: parseInt(id) },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Entrée supprimée avec succès",
+    });
+
   } catch (error) {
     console.error("Erreur lors de la suppression de l'entrée de temps:", error);
     return NextResponse.json(
-      { success: false, message: "Erreur serveur" },
+      {
+        success: false,
+        message: "Erreur serveur",
+        error: process.env.NODE_ENV === "development" ? (error as Error).message : undefined,
+      },
       { status: 500 }
     );
   }
