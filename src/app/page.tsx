@@ -12,21 +12,15 @@ import { RecentEntries } from "@/components/dashboard/RecentEntries";
 import { PlusIcon } from "@heroicons/react/24/outline";
 import { ProjectsStats } from "@/components/dashboard/ProjectsStats";
 import { TimeSheet } from "@/components/dashboard/TimeSheet";
+import { TimeEntry, ProjectAssignment } from "@/components/dashboard/types";
 
-type User = { id: number; name: string; indice: string; role: string };
-type ProjectAssignment = {
-  projectId: number;
-  project: { name: string; projectNumber: string };
-  allocationPercentage: number | null;
-};
-type TimeEntry = {
-  id: number;
-  project: { name: string; projectNumber: string };
-  activity: { name: string };
-  hours: number;
-  semester: string;
-  year: number;
-  projectId: number;
+type User = { 
+  id: number; 
+  name: string; 
+  indice: string; 
+  role: string;
+  grade?: string;
+  proformaCost?: number;
 };
 // type Stats = {
 //   totalUsers: number;
@@ -40,7 +34,7 @@ export default function DashboardPage() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [timeEntriesAll, setTimeEntriesAll] = useState<TimeEntry[]>([]);
   const [totalSecondaryHours, setTotalSecondaryHours] = useState<number>(0);
-  const [timeSheetData, setTimeSheetData] = useState<TimeSheetEntry[]>([]);
+  const [timeSheetData, setTimeSheetData] = useState<TimeEntry[]>([]);
   //const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
@@ -58,7 +52,7 @@ export default function DashboardPage() {
     }
 
     try {
-      // Récupérer les infos de l’utilisateur connecté
+      // Récupérer les infos de l'utilisateur connecté
       const userRes = await fetch("/api/auth/me", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -105,6 +99,17 @@ export default function DashboardPage() {
         const currentSemester = now.getMonth() < 6 ? "S1" : "S2";
         const currentYear = now.getFullYear();
 
+        // Récupérer les entrées pour l'année et le semestre actuels
+        const filteredEntries = await fetch(`/api/timeentriesAll?year=${currentYear}&semester=${currentSemester}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const filteredResponse = await filteredEntries.json();
+        
+        if (filteredResponse.success) {
+          console.log("Entrées filtrées:", filteredResponse.data);
+          setTimeSheetData(filteredResponse.data);
+        }
+
         const totalHours = timeEntriesR.data.reduce(
           (sum: number, te: TimeEntry) => {
             const isCurrentPeriod =
@@ -118,22 +123,6 @@ export default function DashboardPage() {
         );
 
         setTotalSecondaryHours(totalHours);
-
-        // Transformer les données pour TimeSheet
-        const timeSheetEntries = timeEntriesR.data.map(entry => ({
-          staff: entry.user?.name || 'N/A',
-          project: entry.project.name,
-          activity: entry.activity.name,
-          subActivity: entry.subActivity?.name || 'N/A',
-          totalHours: entry.hours,
-          grade: entry.user?.grade || 'N/A',
-          annualProformaCost: entry.user?.annualCost || 0,
-          semesterProformaCost: (entry.user?.annualCost || 0) / 2,
-          projectPercentage: (entry.hours / 960) * 100, // 960 heures par semestre
-          projectCost: ((entry.user?.annualCost || 0) / 2) * (entry.hours / 960)
-        }));
-        
-        setTimeSheetData(timeSheetEntries);
       }
 
       // Récupérer les entrées de temps All

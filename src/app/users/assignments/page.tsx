@@ -6,7 +6,7 @@ import { Combobox, Transition } from "@headlessui/react";
 import { CheckIcon, ChevronUpDownIcon } from "@heroicons/react/20/solid";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Navbar from "@/components/Navbar";
-import { PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, TrashIcon, ArrowDownTrayIcon, ArrowUpTrayIcon } from "@heroicons/react/24/outline";
 
 interface FormData {
   userId: number;
@@ -107,7 +107,7 @@ export default function UserAssignmentsPage() {
       const data = await res.json();
       
       const usersWithProjects = await Promise.all(
-        data.map(async (user: { id: number; name: string; indice: string }) => {
+        data.map(async (user: { id: number; name: string; indice: string }, index: number) => {
           try {
             const projectsRes = await fetch(`/api/projects/users/${user.id}`, {
               headers: {
@@ -118,14 +118,14 @@ export default function UserAssignmentsPage() {
 
             if (!projectsRes.ok) {
               console.error(`Erreur pour l'utilisateur ${user.id}`);
-              return { ...user, projects: [] };
+              return { ...user, projects: [], key: `user-${user.id}-${index}` };
             }
 
             const projectsData = await projectsRes.json();
-            return { ...user, projects: projectsData };
+            return { ...user, projects: projectsData.data.assignments, key: `user-${user.id}-${index}` };
           } catch (error) {
             console.error(`Erreur pour l'utilisateur ${user.id}:`, error);
-            return { ...user, projects: [] };
+            return { ...user, projects: [], key: `user-${user.id}-${index}` };
           }
         })
       );
@@ -281,6 +281,88 @@ export default function UserAssignmentsPage() {
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setMessage({ text: "Vous devez être connecté pour télécharger le template", type: 'error' });
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/projects/assignments/template", {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error("Erreur lors du téléchargement du template");
+      }
+
+      // Créer un blob à partir de la réponse
+      const blob = await response.blob();
+      
+      // Créer un lien de téléchargement
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "modele_assignations.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+    } catch (error) {
+      console.error("Erreur:", error);
+      setMessage({ text: "Erreur lors du téléchargement du template", type: 'error' });
+    }
+  };
+
+  const handleImportAssignments = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setMessage({ text: "Vous devez être connecté pour importer des assignations", type: 'error' });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch("/api/projects/assignments/import", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Erreur lors de l'import");
+      }
+
+      setMessage({ 
+        text: `Import terminé : ${data.results.success} assignations importées avec succès${data.results.errors.length > 0 ? `, ${data.results.errors.length} erreurs` : ''}`, 
+        type: data.results.errors.length > 0 ? 'error' : 'success' 
+      });
+
+      // Rafraîchir les données
+      await fetchUsers();
+
+    } catch (error) {
+      console.error("Erreur:", error);
+      setMessage({ text: (error as Error).message || "Erreur lors de l'import", type: 'error' });
+    }
+
+    // Réinitialiser l'input file
+    event.target.value = '';
+  };
+
   // Pagination
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -293,7 +375,28 @@ export default function UserAssignmentsPage() {
         <Navbar />
         <div className="container mx-auto px-4 py-8">
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-2xl font-semibold mb-4">Assignation des Projets aux Utilisateurs</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-semibold">Assignation des Projets aux Utilisateurs</h2>
+              <div className="flex space-x-4">
+                <label className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 cursor-pointer">
+                  <ArrowUpTrayIcon className="h-5 w-5 mr-2" />
+                  Importer
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    className="hidden"
+                    onChange={handleImportAssignments}
+                  />
+                </label>
+                <button
+                  onClick={handleDownloadTemplate}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                >
+                  <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
+                  Télécharger le template
+                </button>
+              </div>
+            </div>
             
             {message.text && (
               <div className={`p-4 mb-4 rounded ${
@@ -338,7 +441,7 @@ export default function UserAssignmentsPage() {
                         ) : (
                           filteredUsers.map((user) => (
                             <Combobox.Option
-                              key={user.id}
+                              key={`user-option-${user.id}`}
                               className={({ active }) =>
                                 `relative cursor-default select-none py-2 pl-10 pr-4 ${
                                   active ? 'bg-teal-600 text-white' : 'text-gray-900'
@@ -377,8 +480,7 @@ export default function UserAssignmentsPage() {
                 <label className="block text-sm font-medium text-gray-700">Projet</label>
                 <Combobox
                   value={projects.find(p => p.id === formData.projectId) || null}
-                  onChange={(project: Project) => setFormData(prev => ({ ...prev, projectId: project.id }))
-                  }
+                  onChange={(project: Project) => setFormData(prev => ({ ...prev, projectId: project.id }))}
                 >
                   <div className="relative mt-1">
                     <div className="relative w-full cursor-default overflow-hidden rounded-lg bg-white text-left border focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-300 sm:text-sm">
@@ -410,7 +512,7 @@ export default function UserAssignmentsPage() {
                         ) : (
                           filteredProjects.map((project) => (
                             <Combobox.Option
-                              key={project.id}
+                              key={`project-option-${project.id}`}
                               className={({ active }) =>
                                 `relative cursor-default select-none py-2 pl-10 pr-4 ${
                                   active ? 'bg-teal-600 text-white' : 'text-gray-900'
@@ -526,7 +628,7 @@ export default function UserAssignmentsPage() {
                     );
                     
                     return (
-                      <tr key={user.id}>
+                      <tr key={`user-row-${user.id}`}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className="ml-4">
@@ -543,7 +645,7 @@ export default function UserAssignmentsPage() {
                           <div className="space-y-2">
                             {user.projects.map((assignment) => (
                               <div 
-                                key={assignment.userId_projectId}
+                                key={`assignment-${assignment.userId_projectId}`}
                                 className="flex items-center justify-between text-sm"
                               >
                                 <span className="font-medium text-gray-900">

@@ -1,8 +1,6 @@
-import { NextResponse, NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authenticate } from "@/lib/auth";
-
-const MAX_TOTAL_HOURS = 480;
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,18 +33,16 @@ export async function GET(request: NextRequest) {
     });
 
     const totalHours = existingEntries.reduce((sum, entry) => sum + entry.hours, 0);
-    const remainingHours = Math.max(0, MAX_TOTAL_HOURS - totalHours);
+    const remainingHours = Math.max(0, 480 - totalHours);
 
     return NextResponse.json({
       success: true,
-      data: {
-        maxHours: MAX_TOTAL_HOURS,
-        usedHours: totalHours,
-        remainingHours,
-      },
+      totalHours,
+      remainingHours
     });
+
   } catch (error) {
-    console.error("Erreur dans /api/time-entries/remaining:", error);
+    console.error("Erreur dans /api/time-entries/semester-hours:", error);
     return NextResponse.json(
       {
         success: false,
@@ -56,4 +52,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+} 

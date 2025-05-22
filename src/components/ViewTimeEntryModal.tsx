@@ -1,6 +1,6 @@
 import { Fragment } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { ClockIcon, BriefcaseIcon, UserIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, BriefcaseIcon, UserIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline';
 
 type TimeEntry = {
   id: number;
@@ -78,6 +78,17 @@ const getStatusBadgeClass = (status: string) => {
 export default function ViewTimeEntryModal({ isOpen, onClose, timeEntry }: ViewTimeEntryModalProps) {
   if (!timeEntry) return null;
 
+  // Calcul du coût proforma
+  const calculateProformaCost = () => {
+    if (!timeEntry.user.proformaCost) return 0;
+    const annualCost = timeEntry.user.proformaCost;
+    const semesterCost = annualCost / 2; // Coût par semestre
+    const hourlyCost = semesterCost / 480; // Coût horaire (480 heures par semestre)
+    return hourlyCost * timeEntry.hours;
+  };
+
+  const proformaCost = calculateProformaCost();
+
   return (
     <Transition.Root show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={onClose}>
@@ -114,7 +125,7 @@ export default function ViewTimeEntryModal({ isOpen, onClose, timeEntry }: ViewT
                   </div>
 
                   {/* Contenu principal */}
-                  <div className="mt-6 space-y-8">
+                  <div className="mt-6 space-y-6">
                     {/* Informations utilisateur */}
                     <div className="rounded-xl bg-gray-50/50 p-4 border border-gray-100">
                       <div className="flex items-center space-x-4">
@@ -126,6 +137,11 @@ export default function ViewTimeEntryModal({ isOpen, onClose, timeEntry }: ViewT
                           <p className="text-sm text-gray-500">{timeEntry.user.indice}</p>
                           {timeEntry.user.grade && (
                             <p className="text-sm text-gray-500">Grade: {timeEntry.user.grade}</p>
+                          )}
+                          {timeEntry.user.proformaCost && (
+                            <p className="text-sm text-gray-500">
+                              Coût annuel {timeEntry.year}: {timeEntry.user.proformaCost.toLocaleString('fr-FR')} FCFA
+                            </p>
                           )}
                         </div>
                       </div>
@@ -159,24 +175,31 @@ export default function ViewTimeEntryModal({ isOpen, onClose, timeEntry }: ViewT
                       </div>
                     </div>
 
-                    {/* Détails temps et statut */}
-                    <div className="rounded-xl bg-gray-50/50 p-4 border border-gray-100">
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                        <div>
-                          <h4 className="text-xs font-medium uppercase text-gray-500">Période</h4>
-                          <p className="mt-1 text-sm text-gray-900">
-                            {timeEntry.semester} {timeEntry.year}
+                    {/* Détails temps, statut et coût */}
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                      <div>
+                        <h4 className="text-xs font-medium uppercase text-gray-500">Période</h4>
+                        <p className="mt-1 text-sm text-gray-900">
+                          {timeEntry.semester} {timeEntry.year}
+                        </p>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-medium uppercase text-gray-500">Heures</h4>
+                        <p className="mt-1 text-sm text-gray-900">{timeEntry.hours}h</p>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-medium uppercase text-gray-500">Statut</h4>
+                        <span className={`mt-1 inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${getStatusBadgeClass(timeEntry.status)}`}>
+                          {getStatusTranslation(timeEntry.status)}
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-medium uppercase text-gray-500">Coût Proforma</h4>
+                        <div className="mt-1 flex items-center space-x-2">
+                          <CurrencyDollarIcon className="h-4 w-4 text-green-600" />
+                          <p className="text-sm text-gray-900">
+                            {proformaCost.toLocaleString('fr-FR')} FCFA
                           </p>
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-medium uppercase text-gray-500">Heures</h4>
-                          <p className="mt-1 text-sm text-gray-900">{timeEntry.hours}h</p>
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-medium uppercase text-gray-500">Statut</h4>
-                          <span className={`mt-1 inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${getStatusBadgeClass(timeEntry.status)}`}>
-                            {getStatusTranslation(timeEntry.status)}
-                          </span>
                         </div>
                       </div>
                     </div>
@@ -212,7 +235,7 @@ export default function ViewTimeEntryModal({ isOpen, onClose, timeEntry }: ViewT
                 </div>
 
                 {/* Footer */}
-                <div className="mt-8 border-t border-gray-100 pt-5">
+                <div className="mt-6">
                   <div className="flex justify-end">
                     <button
                       type="button"

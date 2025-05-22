@@ -25,15 +25,38 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Récupérer les paramètres de filtrage
+    const { searchParams } = new URL(request.url);
+    const year = searchParams.get("year");
+    const semester = searchParams.get("semester");
+
+    // Construire la requête avec les filtres
+    const where = {
+      ...(year && semester ? {
+        year: parseInt(year),
+        semester: semester as "S1" | "S2"
+      } : {})
+    };
+
+    console.log("Filtres de recherche:", where);
+
     const timeEntries = await prisma.timeEntry.findMany({
+      where,
       include: {
         user: {
           select: {
             name: true,
             indice: true,
             grade: true,
-            proformaCost: true,
             type: true,
+            proformaCosts: {
+              where: {
+                year: parseInt(year || new Date().getFullYear().toString())
+              },
+              select: {
+                cost: true
+              }
+            }
           },
         },
         project: {
@@ -52,9 +75,20 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Transformer les données pour inclure le coût proforma
+    const transformedEntries = timeEntries.map(entry => ({
+      ...entry,
+      user: {
+        ...entry.user,
+        proformaCost: entry.user.proformaCosts[0]?.cost || 0
+      }
+    }));
+
+    console.log("Nombre d'entrées trouvées:", transformedEntries.length);
+
     return NextResponse.json({
       success: true,
-      data: timeEntries,
+      data: transformedEntries,
     });
   } catch (error) {
     console.error("Erreur dans /api/timeentriesAll:", error);

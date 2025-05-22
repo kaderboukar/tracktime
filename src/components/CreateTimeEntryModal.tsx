@@ -12,6 +12,9 @@ interface CreateTimeEntryModalProps {
   activities: Activity[];
   remainingHours: number;
   editMode: boolean;
+  parentActivity: number | null;
+  childActivities: Activity[];
+  onParentActivityChange: (activityId: number) => void;
 }
 
 interface FormData {
@@ -47,7 +50,10 @@ export default function CreateTimeEntryModal({
   projects,
   activities,
   remainingHours,
-  editMode
+  editMode,
+  parentActivity,
+  childActivities,
+  onParentActivityChange
 }: CreateTimeEntryModalProps) {
   return (
     <Transition.Root show={isOpen} as={Fragment}>
@@ -116,27 +122,51 @@ export default function CreateTimeEntryModal({
                         </select>
                       </div>
 
-                      {/* Activité */}
+                      {/* Activité parente */}
                       <div>
-                        <label htmlFor="activityId" className="block text-sm font-medium text-gray-700">
-                          Activité
+                        <label htmlFor="parentActivity" className="block text-sm font-medium text-gray-700">
+                          Activité principale
                         </label>
                         <select
-                          id="activityId"
-                          name="activityId"
-                          value={formData.activityId}
-                          onChange={(e) => onChange('activityId', parseInt(e.target.value))}
+                          id="parentActivity"
+                          name="parentActivity"
+                          value={parentActivity || ''}
+                          onChange={(e) => onParentActivityChange(parseInt(e.target.value))}
                           required
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                         >
-                          <option value="">Sélectionner une activité</option>
-                          {activities.map((activity) => (
+                          <option value="">Sélectionner une activité principale</option>
+                          {activities.filter(activity => !activity.parentId).map((activity) => (
                             <option key={activity.id} value={activity.id}>
                               {activity.name}
                             </option>
                           ))}
                         </select>
                       </div>
+
+                      {/* Sous-activité */}
+                      {parentActivity && childActivities.length > 0 && (
+                        <div>
+                          <label htmlFor="activityId" className="block text-sm font-medium text-gray-700">
+                            Sous-activité
+                          </label>
+                          <select
+                            id="activityId"
+                            name="activityId"
+                            value={formData.activityId}
+                            onChange={(e) => onChange('activityId', parseInt(e.target.value))}
+                            required
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          >
+                            <option value="">Sélectionner une sous-activité</option>
+                            {childActivities.map((activity) => (
+                              <option key={activity.id} value={activity.id}>
+                                {activity.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
 
                       {/* Heures */}
                       <div>

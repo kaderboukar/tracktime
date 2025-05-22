@@ -5,7 +5,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Toaster, toast } from 'sonner';
 import { ClockIcon, PencilIcon, TrashIcon, EyeIcon, PlusIcon } from '@heroicons/react/24/outline';
-import { MAX_HOURS_PER_SEMESTER } from '@/lib/constants';
 import Navbar from "@/components/Navbar";
 import ViewTimeEntryModal from "@/components/ViewTimeEntryModal";
 import ConfirmationModal from "@/components/ConfirmationModal";
@@ -118,6 +117,7 @@ export default function TimeEntriesPage() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
@@ -128,11 +128,16 @@ export default function TimeEntriesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const router = useRouter();
-  const [remainingHours, setRemainingHours] = useState<number>(MAX_HOURS_PER_SEMESTER);
+  const [remainingHours, setRemainingHours] = useState<number>(480);
   const [currentYear] = useState(new Date().getFullYear());
   const [currentSemester] = useState<"S1" | "S2">(new Date().getMonth() < 6 ? "S1" : "S2");
   const [formData, setFormData] = useState<FormData>(initializeFormData());
   const [existingYearSemesters, setExistingYearSemesters] = useState<YearSemester[]>([]);
+  const [parentActivity, setParentActivity] = useState<number | null>(null);
+  const [childActivities, setChildActivities] = useState<Activity[]>([]);
+  const [totalHoursUsed, setTotalHoursUsed] = useState<number>(0);
+  const MAX_TOTAL_HOURS = 480;
+  const [semesterHours, setSemesterHours] = useState<{ total: number; remaining: number }>({ total: 0, remaining: 480 });
 
   // Fonction pour vérifier si une combinaison année/semestre est déjà enregistrée
   const isYearSemesterRegistered = (year: number, semester: "S1" | "S2") => {
@@ -173,13 +178,34 @@ export default function TimeEntriesPage() {
     return "";
   };
 
+  const getStatusOrder = (status: string | undefined) => {
+    switch (status) {
+      case 'PENDING':
+        return 0;
+      case 'REJECTED':
+        return 1;
+      case 'REVISED':
+        return 2;
+      case 'APPROVED':
+        return 3;
+      default:
+        return 0;
+    }
+  };
+
+  const sortedTimeEntries = [...timeEntries].sort((a, b) => {
+    const statusOrderA = getStatusOrder(a.status);
+    const statusOrderB = getStatusOrder(b.status);
+    return statusOrderA - statusOrderB;
+  });
+
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentTimeEntries = timeEntries.slice(
+  const currentTimeEntries = sortedTimeEntries.slice(
     indexOfFirstItem,
     indexOfLastItem
   );
-  const totalPages = Math.ceil(timeEntries.length / itemsPerPage);
+  const totalPages = Math.ceil(sortedTimeEntries.length / itemsPerPage);
 
   const handlePageChange = (pageNumber: number) => {
     setCurrentPage(pageNumber);
@@ -251,7 +277,11 @@ export default function TimeEntriesPage() {
   const fetchSecondaryProjects = async (userId: number) => {
     try {
       const token = localStorage.getItem("token");
-      if (!token || !userId) return;
+      if (!token || !userId) {
+        setProjects([]);
+        setFilteredProjects([]);
+        return;
+      }
 
       const res = await fetch(`/api/projects/users/${userId}/secondary`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -260,13 +290,16 @@ export default function TimeEntriesPage() {
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
         setProjects(data.data);
+        setFilteredProjects(data.data);
       } else {
         console.error("Format de données invalide pour les projets");
         setProjects([]);
+        setFilteredProjects([]);
       }
     } catch (error) {
       console.error("Erreur lors de la récupération des projets:", error);
       setProjects([]);
+      setFilteredProjects([]);
     }
   };
 
@@ -296,12 +329,12 @@ export default function TimeEntriesPage() {
   const fetchRemainingHours = async (userId: number, semester: string, year: number) => {
     try {
       const token = localStorage.getItem("token");
-      const existingEntries = await fetch(`/api/time-entries/remaining?userId=${userId}&semester=${semester}&year=${year}`, {
+      const response = await fetch(`/api/time-entries/remaining?userId=${userId}&semester=${semester}&year=${year}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await existingEntries.json();
+      const data = await response.json();
       if (data.success) {
-        setRemainingHours(data.remainingHours);
+        setRemainingHours(data.data.remainingHours);
       }
     } catch (error) {
       console.error("Erreur lors du calcul des heures restantes:", error);
@@ -379,24 +412,82 @@ export default function TimeEntriesPage() {
     }
   }, [formData.userId, formData.semester, formData.year]);
 
-  // Modification des fonctions de validation pour utiliser Sonner
+  const calculateTotalHoursUsed = (entries: TimeEntry[]) => {
+    return entries.reduce((total, entry) => total + entry.hours, 0);
+  };
+
+  useEffect(() => {
+    const total = calculateTotalHoursUsed(timeEntries);
+    setTotalHoursUsed(Math.min(total, MAX_TOTAL_HOURS));
+  }, [timeEntries]);
+
+  const getRemainingHours = () => {
+    return Math.max(0, MAX_TOTAL_HOURS - totalHoursUsed);
+  };
+
+  const fetchSemesterHours = async (userId: number, semester: string, year: number) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`/api/time-entries/semester-hours?userId=${userId}&semester=${semester}&year=${year}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setSemesterHours({
+          total: data.totalHours,
+          remaining: data.remainingHours
+        });
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération des heures du semestre:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (formData.userId && formData.semester && formData.year) {
+      fetchSemesterHours(formData.userId, formData.semester, formData.year);
+    }
+  }, [formData.userId, formData.semester, formData.year]);
+
   const validateHours = (hours: number) => {
     if (hours <= 0) {
       toast.error("Le nombre d'heures doit être supérieur à 0");
       return false;
     }
-    if (hours > remainingHours) {
-      toast.error(`Vous ne pouvez pas dépasser ${remainingHours} heures disponibles pour ce semestre`);
+    
+    // Vérifier la limite par semestre
+    if (hours > semesterHours.remaining) {
+      toast.error(`Vous avez déjà ${semesterHours.total} heures pour ce semestre. Il vous reste ${semesterHours.remaining} heures disponibles.`);
       return false;
     }
+
+    // Vérifier la limite globale de 480 heures
+    const remainingGlobalHours = getRemainingHours();
+    if (hours > remainingGlobalHours) {
+      toast.error(`Vous ne pouvez pas dépasser ${remainingGlobalHours} heures restantes sur le total de ${MAX_TOTAL_HOURS} heures.`);
+      return false;
+    }
+
     return true;
   };
 
   const handleHoursChange = (value: number) => {
-    if (value > remainingHours) {
-      toast.error(`Vous ne pouvez pas dépasser ${remainingHours} heures disponibles pour ce semestre`);
+    if (value <= 0) {
+      toast.error("Le nombre d'heures doit être supérieur à 0");
       return;
     }
+
+    if (value > semesterHours.remaining) {
+      toast.error(`Vous avez déjà ${semesterHours.total} heures pour ce semestre. Il vous reste ${semesterHours.remaining} heures disponibles.`);
+      return;
+    }
+
+    const remainingGlobalHours = getRemainingHours();
+    if (value > remainingGlobalHours) {
+      toast.error(`Vous ne pouvez pas dépasser ${remainingGlobalHours} heures restantes sur le total de ${MAX_TOTAL_HOURS} heures.`);
+      return;
+    }
+
     setFormData({
       ...formData,
       hours: value,
@@ -522,6 +613,21 @@ export default function TimeEntriesPage() {
     }
   };
 
+  const handleParentActivityChange = (activityId: number) => {
+    setParentActivity(activityId);
+    const selectedActivity = activities.find(act => act.id === activityId);
+    if (selectedActivity && selectedActivity.children) {
+      setChildActivities(selectedActivity.children);
+    } else {
+      setChildActivities([]);
+    }
+    // Réinitialiser l'activité sélectionnée
+    setFormData(prev => ({
+      ...prev,
+      activityId: 0
+    }));
+  };
+
   const openCreateModal = async () => {
     const token = localStorage.getItem("token");
     try {
@@ -535,32 +641,21 @@ export default function TimeEntriesPage() {
       }
 
       const userId = userData.data.id;
-      await fetchUserProjects(userId);
+      await fetchSecondaryProjects(userId);
 
       setEditMode(false);
       setFormData({
         ...initializeFormData(),
         userId,
       });
+      setParentActivity(null);
+      setChildActivities([]);
       setIsCreateModalOpen(true);
 
     } catch (error) {
       showNotification("Erreur lors de la récupération de l'utilisateur", 'error');
       console.error(error);
     }
-  };
-
-  const handleParentActivityChange = (
-    e: React.ChangeEvent<HTMLSelectElement>
-  )  => {
-    const parentId = parseInt(e.target.value);
-    setParentActivity(parentId);
-    const parent = activities.find((a) => a.id === parentId);
-    setChildActivities(parent?.children || []);
-    setFormData({
-      ...formData,
-      activityId: 0, // Réinitialiser l'activité sélectionnée
-    });
   };
 
   const filterProjects = (query: string) => {
@@ -600,24 +695,22 @@ export default function TimeEntriesPage() {
 
   if (loading) {
     return (
-      <RoleBasedProtectedRoute allowedRoles={["ADMIN", "PMSU"]}>
-        <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50">
-          <div className="relative group">
-            <div className="animate-spin rounded-full h-24 w-24 border-t-4 border-b-4 border-blue-600"></div>
-            <div className="absolute top-0 left-0 animate-ping rounded-full h-24 w-24 border-t-4 border-b-4 border-indigo-400 opacity-20"></div>
-            <div className="absolute top-2 left-2 animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-indigo-500"></div>
-            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-          </div>
-          <div className="mt-8 text-center">
-            <p className="text-lg font-medium text-gray-700 animate-pulse">
-              Chargement en cours...
-            </p>
-            <p className="text-sm text-gray-500 mt-2">
-              Veuillez patienter un instant
-            </p>
-          </div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50">
+        <div className="relative group">
+          <div className="animate-spin rounded-full h-24 w-24 border-t-4 border-b-4 border-blue-600"></div>
+          <div className="absolute top-0 left-0 animate-ping rounded-full h-24 w-24 border-t-4 border-b-4 border-indigo-400 opacity-20"></div>
+          <div className="absolute top-2 left-2 animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-indigo-500"></div>
+          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
         </div>
-      </RoleBasedProtectedRoute>
+        <div className="mt-8 text-center">
+          <p className="text-lg font-medium text-gray-700 animate-pulse">
+            Chargement en cours...
+          </p>
+          <p className="text-sm text-gray-500 mt-2">
+            Veuillez patienter un instant
+          </p>
+        </div>
+      </div>
     );
   }
 
@@ -724,7 +817,7 @@ export default function TimeEntriesPage() {
         <Navbar />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* En-tête avec statistiques */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 p-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -742,7 +835,7 @@ export default function TimeEntriesPage() {
                 <div>
                   <p className="text-sm text-gray-500">Total des heures</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {timeEntries.reduce((sum, entry) => sum + entry.hours, 0)} h
+                    {totalHoursUsed} / {MAX_TOTAL_HOURS} h
                   </p>
                 </div>
                 <div className="p-3 bg-green-50 rounded-xl">
@@ -762,6 +855,37 @@ export default function TimeEntriesPage() {
                 </div>
               </div>
             </div>
+
+            {/* <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Heures restantes globales</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {getRemainingHours()} h
+                  </p>
+                </div>
+                <div className="p-3 bg-orange-50 rounded-xl">
+                  <ClockIcon className="w-6 h-6 text-orange-600" />
+                </div>
+              </div>
+            </div> */}
+
+            {/* <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500">Heures du semestre</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {semesterHours.total} / 480 h
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Restant: {semesterHours.remaining} h
+                  </p>
+                </div>
+                <div className="p-3 bg-blue-50 rounded-xl">
+                  <ClockIcon className="w-6 h-6 text-blue-600" />
+                </div>
+              </div>
+            </div> */}
           </div>
 
           {/* Header principal */}
@@ -794,6 +918,9 @@ export default function TimeEntriesPage() {
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/50">
                     <th className="px-6 py-4 text-left">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</span>
+                    </th>
+                    <th className="px-6 py-4 text-left">
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Utilisateur</span>
                     </th>
                     <th className="px-6 py-4 text-left">
@@ -809,9 +936,6 @@ export default function TimeEntriesPage() {
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Heures</span>
                     </th>
                     <th className="px-6 py-4 text-left">
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</span>
-                    </th>
-                    <th className="px-6 py-4 text-left">
                       <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</span>
                     </th>
                   </tr>
@@ -819,6 +943,19 @@ export default function TimeEntriesPage() {
                 <tbody className="divide-y divide-gray-50">
                   {currentTimeEntries.map((entry) => (
                     <tr key={entry.id} className="group hover:bg-gray-50/50 transition-colors duration-200">
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col space-y-2">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusBadgeClass(entry.status || 'PENDING')}`}>
+                            {getStatusTranslation(entry.status || 'PENDING')}
+                          </span>
+                          {entry.comment && (
+                            <span className="text-xs text-gray-500 max-w-xs truncate" title={entry.comment}>
+                              {entry.comment}
+                            </span>
+                          )}
+                          {renderValidationButtons(entry)}
+                        </div>
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-3">
                           <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
@@ -853,19 +990,6 @@ export default function TimeEntriesPage() {
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-100">
                           {entry.hours}h
                         </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col space-y-2">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusBadgeClass(entry.status || 'PENDING')}`}>
-                            {getStatusTranslation(entry.status || 'PENDING')}
-                          </span>
-                          {entry.comment && (
-                            <span className="text-xs text-gray-500 max-w-xs truncate" title={entry.comment}>
-                              {entry.comment}
-                            </span>
-                          )}
-                          {renderValidationButtons(entry)}
-                        </div>
                       </td>
                       <td className="px-6 py-4">
                         {renderActionButtons(entry)}
@@ -905,10 +1029,11 @@ export default function TimeEntriesPage() {
                         <button
                           key={pageNumber}
                           onClick={() => handlePageChange(pageNumber)}
-                          className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200
-                                    ${isCurrentPage
+                          className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 ${
+                            isCurrentPage
                               ? "bg-blue-600 text-white"
-                              : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"}`}
+                              : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
+                          }`}
                         >
                           {pageNumber}
                         </button>
@@ -922,10 +1047,11 @@ export default function TimeEntriesPage() {
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200
-                              ${currentPage === totalPages
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      currentPage === totalPages
                         ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                        : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"}`}
+                        : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
+                    }`}
                   >
                     Suivant
                   </button>
@@ -938,7 +1064,11 @@ export default function TimeEntriesPage() {
         {/* Modals */}
         <CreateTimeEntryModal 
           isOpen={isCreateModalOpen}
-          onClose={() => setIsCreateModalOpen(false)}
+          onClose={() => {
+            setIsCreateModalOpen(false);
+            setParentActivity(null);
+            setChildActivities([]);
+          }}
           formData={formData}
           onSubmit={handleSubmit}
           onChange={handleFormChange}
@@ -946,6 +1076,9 @@ export default function TimeEntriesPage() {
           activities={activities}
           remainingHours={remainingHours}
           editMode={editMode}
+          parentActivity={parentActivity}
+          childActivities={childActivities}
+          onParentActivityChange={handleParentActivityChange}
         />
         
         <ViewTimeEntryModal
@@ -968,4 +1101,3 @@ export default function TimeEntriesPage() {
     </RoleBasedProtectedRoute>
   );
 }
-

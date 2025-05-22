@@ -21,7 +21,12 @@ export async function GET(request: NextRequest) {
             name: true,
             indice: true,
             grade: true,
-            proformaCosts: true,
+            proformaCosts: {
+              select: {
+                year: true,
+                cost: true
+              }
+            },
           },
         },
         project: {
@@ -38,9 +43,22 @@ export async function GET(request: NextRequest) {
       },
     });
 
+    // Transformer les données pour inclure le coût proforma de l'année spécifique
+    const transformedEntries = timeEntries.map(entry => {
+      const proformaCost = entry.user.proformaCosts?.find(cost => cost.year === entry.year)?.cost;
+      return {
+        ...entry,
+        user: {
+          ...entry.user,
+          proformaCost,
+          proformaCosts: undefined // Supprimer l'array proformaCosts car nous n'en avons plus besoin
+        }
+      };
+    });
+
     return NextResponse.json({
       success: true,
-      data: timeEntries,
+      data: transformedEntries,
     });
   } catch (error) {
     console.error("Erreur dans /api/time-entries:", error);
@@ -53,6 +71,25 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function checkSemesterHours(userId: number, semester: "S1" | "S2", year: number, hoursToAdd: number = 0) {
+  const existingEntries = await prisma.timeEntry.findMany({
+    where: {
+      userId,
+      semester: semester as "S1" | "S2",
+      year
+    },
+    select: {
+      hours: true
+    }
+  });
+
+  const totalHours = existingEntries.reduce((sum, entry) => sum + entry.hours, 0) + hoursToAdd;
+  return {
+    totalHours,
+    remainingHours: Math.max(0, 480 - totalHours)
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -69,6 +106,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, message: "Vous ne pouvez créer des entrées que pour vous-même" },
         { status: 403 }
+      );
+    }
+
+    // Vérifier les heures du semestre
+    const { totalHours, remainingHours } = await checkSemesterHours(
+      data.userId,
+      data.semester,
+      data.year,
+      data.hours
+    );
+
+    if (totalHours > 480) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          message: `Vous avez déjà ${totalHours - data.hours} heures pour ce semestre. Il vous reste ${remainingHours} heures disponibles.` 
+        },
+        { status: 400 }
       );
     }
 

@@ -8,13 +8,21 @@ export type ProjectAssignment = {
 
 export type TimeEntry = {
   id: number;
-  project: { name: string; projectNumber: string };
-  activity: { name: string };
-  semester: 'S1' | 'S2';
-  year: number;
   hours: number;
+  semester: "S1" | "S2";
+  year: number;
   user: {
-    proformaCost: number;
+    name: string;
+    indice: string;
+    grade?: string;
+    proformaCost?: number;
+  };
+  project: {
+    name: string;
+    projectNumber: string;
+  };
+  activity: {
+    name: string;
   };
 };
 

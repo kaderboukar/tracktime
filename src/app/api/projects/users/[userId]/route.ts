@@ -3,18 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authenticate, getUserIdFromToken } from "@/lib/auth";
 
-// Types pour la gestion des assignations
-export enum AssignmentStatus {
-  PENDING = "PENDING",
-  ACTIVE = "ACTIVE",
-  COMPLETED = "COMPLETED"
-}
+
 
 interface AssignmentValidationResult {
   isValid: boolean;
   message?: string;
   currentTotal: number;
-  status: AssignmentStatus;
 }
 
 // Fonction de validation des assignations
@@ -22,7 +16,6 @@ async function validateAssignment(userId: number, newPercentage: number): Promis
   const existingAssignments = await prisma.userProject.findMany({
     where: { 
       userId,
-      status: AssignmentStatus.ACTIVE 
     }
   });
 
@@ -37,21 +30,19 @@ async function validateAssignment(userId: number, newPercentage: number): Promis
     return {
       isValid: false,
       message: `Le total des assignations (${newTotal}%) dépasserait 100%`,
-      currentTotal,
-      status: AssignmentStatus.PENDING
+      currentTotal
     };
   }
 
   return {
     isValid: true,
     currentTotal: newTotal,
-    status: AssignmentStatus.ACTIVE
   };
 }
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params:  Promise<{ userId: string }> }
 ) {
   try {
     const authResult = await authenticate(req);
@@ -73,8 +64,9 @@ export async function GET(
       );
     }
 
-    const userId = parseInt(params.userId);
-    if (isNaN(userId)) {
+    const { userId } = await params;
+    const userIdNum = parseInt(userId);
+    if (isNaN(userIdNum)) {
       return NextResponse.json(
         { message: "ID utilisateur invalide" },
         { status: 400 }
@@ -82,14 +74,13 @@ export async function GET(
     }
 
     const userProjects = await prisma.userProject.findMany({
-      where: { userId },
+      where: { userId: userIdNum },
       include: {
         project: {
           select: {
             id: true,
             name: true,
-            projectNumber: true,
-            status: true
+            projectNumber: true
           }
         }
       },
@@ -155,7 +146,6 @@ export async function POST(
           message: validationResult.message,
           data: {
             currentTotal: validationResult.currentTotal,
-            status: validationResult.status
           }
         },
         { status: 400 }
@@ -167,7 +157,6 @@ export async function POST(
         userId,
         projectId,
         allocationPercentage,
-        status: validationResult.status
       },
       include: {
         project: {
@@ -185,7 +174,6 @@ export async function POST(
       data: {
         assignment: userProject,
         totalAllocation: validationResult.currentTotal,
-        status: validationResult.status,
         remainingAllocation: 100 - validationResult.currentTotal,
       }
     });
