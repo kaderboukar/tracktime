@@ -5,6 +5,7 @@ import {
   FunnelIcon,
   ArrowDownTrayIcon,
   DocumentArrowDownIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -46,24 +47,28 @@ interface TimeSheetProps {
   timeEntries: TimeEntry[];
 }
 
+interface ProjectData {
+  name: string;
+  activities: {
+    [key: string]: {
+      name: string;
+      hours: number;
+    };
+  };
+  totalHours: number;
+  projectCost: number;
+}
+
 interface UserData {
   staff: string;
   grade: string;
   annualProformaCost: number;
   semesterProformaCost: number;
   projects: {
-    [key: string]: {
-      name: string;
-      totalHours: number;
-      activities: {
-        [key: string]: {
-          name: string;
-          hours: number;
-        };
-      };
-      projectCost: number;
-    };
+    [key: string]: ProjectData;
   };
+  totalHours: number;
+  totalCost: number;
 }
 
 export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
@@ -83,6 +88,7 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
   );
   const [processedEntries, setProcessedEntries] = useState<TimeSheetEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({});
 
   // Fonction pour mettre à jour les données
   const updateData = async (year: number, semester: "S1" | "S2") => {
@@ -221,43 +227,62 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
   };
 
   const exportUserToPDF = (userData: UserData) => {
-    const doc = new jsPDF();
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
     
-    // En-tête
-    doc.setFontSize(16);
-    doc.text("Feuille de Temps", 14, 15);
-    doc.setFontSize(12);
-    doc.text(`Période: ${selectedYear} - ${selectedSemester}`, 14, 25);
-    doc.text(`Staff: ${userData.staff}`, 14, 35);
-    doc.text(`Grade: ${userData.grade}`, 14, 45);
-    doc.text(`Coût Proforma Annuel: ${userData.annualProformaCost.toLocaleString("fr-FR")} USD`, 14, 55);
-    doc.text(`Coût Proforma Semestriel: ${userData.semesterProformaCost.toLocaleString("fr-FR")} USD`, 14, 65);
+    // Ajouter le logo du PNUD et ajuster la position verticale
+    doc.addImage("/logoundp.png", "PNG", 250, 18, 25, 35);
 
+    // En-tête avec titre stylisé et ajuster la position verticale (en dessous du logo)
+    doc.setFontSize(20);
+    doc.setTextColor(66, 139, 202); // Bleu
+    doc.text("FICHE DE TEMPS", 148, 50, { align: "center" });
+
+    // Informations de l'employé
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0); // Noir
+    // doc.text("INFORMATIONS DE L'EMPLOYÉ", 20, 35);
+    doc.setFontSize(10);
+    doc.text(`Nom: ${userData.staff}`, 20, 70);
+    doc.text(`Grade: ${userData.grade}`, 20, 75);
+    doc.text(`Période: ${selectedYear} - ${selectedSemester}`, 20, 80);
+    
     // Préparer les données pour le tableau
     const tableData: string[][] = [];
     let totalHours = 0;
-    let totalCost = 0;
+    let totalActivityCost = 0;
+
+    const formatAmount = (amount: number) => {
+      return `${Math.round(amount).toLocaleString('fr-FR', { useGrouping: false })} USD`;
+    };
 
     Object.values(userData.projects).forEach((project) => {
       Object.values(project.activities).forEach((activity) => {
+        // Calculer le coût par activité
+        const hourlyRate = userData.semesterProformaCost / 480; // Coût horaire (480 heures par semestre)
+        const activityCost = hourlyRate * activity.hours;
+
         tableData.push([
           project.name,
           activity.name,
           `${activity.hours}h`,
-          `${project.projectCost.toLocaleString("fr-FR")} USD`
+          formatAmount(Math.round(activityCost))
         ]);
         totalHours += activity.hours;
-        totalCost += project.projectCost;
+        totalActivityCost += activityCost;
       });
     });
 
     // Ajouter le tableau
     autoTable(doc, {
-      startY: 75,
+      startY: 95,
       head: [['Projet', 'Activité', 'Heures', 'Coût']],
       body: tableData,
       foot: [
-        ['Total', '', `${totalHours}h`, `${totalCost.toLocaleString("fr-FR")} USD`]
+        ['Total', '', `${totalHours}h`, formatAmount(Math.round(totalActivityCost))]
       ],
       theme: 'grid',
       styles: {
@@ -273,11 +298,59 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
         fillColor: [240, 240, 240],
         textColor: 0,
         fontStyle: 'bold',
+      },
+      columnStyles: {
+        0: { cellWidth: 75 }, // Projet
+        1: { cellWidth: 90 }, // Activité
+        2: { cellWidth: 35 }, // Heures
+        3: { cellWidth: 50 }, // Coût
+      },
+      margin: { left: 20, right: 20 },
+      didDrawPage: function (data) {
+        doc.setFontSize(8);
+        doc.setTextColor(100);
+        const currentDate = new Date();
+        const formattedDate = currentDate.toLocaleDateString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+        doc.text(`generer le ${formattedDate} par time-tracker`, data.settings.margin.left, (doc as any).internal.pageSize.height - 10);
       }
     });
 
+    // Positionner la date et la signature en bas du document, après le tableau
+    const tableEndY = (doc as any).lastAutoTable.finalY || 180; // Position de fin du tableau
+    const bottomMargin = 20; // Marge du bas souhaitée
+    const pageHeight = (doc as any).internal.pageSize.height; // Hauteur de la page
+    
+    // Calculer la position Y pour la date et la signature
+    // Elle doit être soit à bottomMargin de la fin de la page, soit bottomMargin après le tableau, selon ce qui est le plus bas
+    const signatureY = Math.max(tableEndY + bottomMargin, pageHeight - bottomMargin);
+
+    // Date
+    doc.setFontSize(10);
+    const currentDate = new Date();
+    const formattedDate = currentDate.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+    doc.text(`Date: ${formattedDate}`, 20, signatureY);
+
+    // Signature
+    doc.text("Signature:", 200, signatureY);
+    doc.line(200, signatureY + 5, 277, signatureY + 5); // Ligne 5mm en dessous du texte
+
     // Sauvegarder le PDF
-    doc.save(`timesheet_${userData.staff}_${selectedYear}_${selectedSemester}.pdf`);
+    doc.save(`fiche_de_temps_${userData.staff}_${selectedYear}_${selectedSemester}.pdf`);
+  };
+
+  const toggleUser = (staff: string) => {
+    setExpandedUsers(prev => ({
+      ...prev,
+      [staff]: !prev[staff]
+    }));
   };
 
   return (
@@ -362,22 +435,22 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
                 </th>
                 <th className="pb-3 px-4 text-right">
                   <span className="text-xs font-medium text-gray-500 uppercase">
+                    Grade
+                  </span>
+                </th>
+                <th className="pb-3 px-4 text-right">
+                  <span className="text-xs font-medium text-gray-500 uppercase">
                     Projet
                   </span>
                 </th>
                 <th className="pb-3 px-4 text-right">
                   <span className="text-xs font-medium text-gray-500 uppercase">
-                    Activité
+                    Activités
                   </span>
                 </th>
                 <th className="pb-3 px-4 text-right">
                   <span className="text-xs font-medium text-gray-500 uppercase">
                     Total Heures
-                  </span>
-                </th>
-                <th className="pb-3 px-4 text-right">
-                  <span className="text-xs font-medium text-gray-500 uppercase">
-                    Grade
                   </span>
                 </th>
                 <th className="pb-3 px-4 text-right">
@@ -390,11 +463,6 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
                     Coût Proforma Semestriel
                   </span>
                 </th>
-                {/* <th className="pb-3 px-4 text-right">
-                  <span className="text-xs font-medium text-gray-500 uppercase">
-                    % Projet
-                  </span>
-                </th> */}
                 <th className="pb-3 px-4 text-right">
                   <span className="text-xs font-medium text-gray-500 uppercase">
                     Coût par Projet
@@ -408,90 +476,93 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {processedEntries.map((entry, index) => {
-                // Regrouper les données par utilisateur
-                const userData = processedEntries.reduce((acc: any, e) => {
-                  if (e.staff === entry.staff) {
-                    if (!acc.projects) acc.projects = {};
-                    if (!acc.projects[e.project]) {
-                      acc.projects[e.project] = {
-                        name: e.project,
-                        totalHours: 0,
-                        activities: {},
-                        projectCost: 0
-                      };
-                    }
-                    if (!acc.projects[e.project].activities[e.activity]) {
-                      acc.projects[e.project].activities[e.activity] = {
-                        name: e.activity,
-                        hours: 0
-                      };
-                    }
-                    acc.projects[e.project].activities[e.activity].hours += e.totalHours;
-                    acc.projects[e.project].projectCost += e.projectCost;
-                    acc.staff = e.staff;
-                    acc.grade = e.grade;
-                    acc.annualProformaCost = e.annualProformaCost;
-                    acc.semesterProformaCost = e.semesterProformaCost;
+              {Object.entries(
+                processedEntries.reduce((acc: Record<string, UserData>, entry) => {
+                  if (!acc[entry.staff]) {
+                    acc[entry.staff] = {
+                      staff: entry.staff,
+                      grade: entry.grade,
+                      annualProformaCost: entry.annualProformaCost,
+                      semesterProformaCost: entry.semesterProformaCost,
+                      projects: {},
+                      totalHours: 0,
+                      totalCost: 0
+                    };
                   }
-                  return acc;
-                }, {});
+                  
+                  if (!acc[entry.staff].projects[entry.project]) {
+                    acc[entry.staff].projects[entry.project] = {
+                      name: entry.project,
+                      activities: {},
+                      totalHours: 0,
+                      projectCost: 0
+                    };
+                  }
 
-                return (
-                  <tr
-                    className="group hover:bg-gray-50/50"
-                    key={entry.staff + index}
-                  >
+                  if (!acc[entry.staff].projects[entry.project].activities[entry.activity]) {
+                    acc[entry.staff].projects[entry.project].activities[entry.activity] = {
+                      name: entry.activity,
+                      hours: 0
+                    };
+                  }
+
+                  acc[entry.staff].projects[entry.project].activities[entry.activity].hours += entry.totalHours;
+                  acc[entry.staff].projects[entry.project].totalHours += entry.totalHours;
+                  acc[entry.staff].projects[entry.project].projectCost += entry.projectCost;
+                  acc[entry.staff].totalHours += entry.totalHours;
+                  acc[entry.staff].totalCost += entry.projectCost;
+
+                  return acc;
+                }, {})
+              ).map(([staff, userData]) => (
+                <React.Fragment key={staff}>
+                  <tr className="border-t-2 border-blue-100">
                     <td className="py-4 px-4">
-                      <span className="text-sm font-medium text-gray-900">
-                        {entry.staff}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="text-sm font-medium text-gray-900">
-                        {entry.project}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="text-sm font-medium text-gray-900">
-                        {entry.activity}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="text-sm font-medium text-gray-900">
-                        {entry.totalHours}h
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="text-sm font-medium text-gray-900">
-                        {entry.grade}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="text-sm font-medium text-gray-900">
-                        {entry.annualProformaCost.toLocaleString("fr-FR")} USD
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="text-sm font-medium text-gray-900">
-                        {entry.semesterProformaCost.toLocaleString("fr-FR")} USD
-                      </span>
-                    </td>
-                    {/* <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-blue-600 h-2 rounded-full"
-                          style={{
-                            width: `${Math.min(entry.projectPercentage, 100)}%`,
-                          }}
-                        ></div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => toggleUser(staff)}
+                          className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                        >
+                          {expandedUsers[staff] ? (
+                            <ChevronDownIcon className="w-5 h-5 text-gray-500" />
+                          ) : (
+                            <ChevronRightIcon className="w-5 h-5 text-gray-500" />
+                          )}
+                        </button>
+                        <span className="text-sm font-medium text-gray-900">
+                          {userData.staff}
+                        </span>
                       </div>
-                      <span className="text-xs text-gray-600 mt-1">
-                        {entry.projectPercentage.toFixed(1)}%
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <span className="text-sm font-medium text-gray-900">
+                        {userData.grade}
                       </span>
-                    </td> */}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                      {entry.projectCost.toLocaleString("fr-FR")} USD
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <span className="text-sm font-medium text-gray-900">
+                        {Object.keys(userData.projects).length} Projets
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <span className="text-sm font-medium text-gray-900">
+                        {userData.totalHours}h
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <span className="text-sm font-medium text-gray-900">
+                        {userData.annualProformaCost.toLocaleString("fr-FR")} USD
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <span className="text-sm font-medium text-gray-900">
+                        {userData.semesterProformaCost.toLocaleString("fr-FR")} USD
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-right">
+                      <span className="text-sm font-medium text-blue-600">
+                        {userData.totalCost.toLocaleString("fr-FR")} USD
+                      </span>
                     </td>
                     <td className="py-4 px-4 text-right">
                       <button
@@ -505,8 +576,45 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
                       </button>
                     </td>
                   </tr>
-                );
-              })}
+                  {expandedUsers[staff] && (
+                    <>
+                      {Object.entries(userData.projects).map(([projectKey, project]: [string, ProjectData], projectIndex) => (
+                        <tr
+                          key={`${staff}-${projectKey}`}
+                          className="group hover:bg-gray-50/50 bg-gray-50/30"
+                        >
+                          <td className="py-4 px-4 pl-12">
+                            <span className="text-sm font-medium text-gray-900">
+                              {project.name}
+                            </span>
+                          </td>
+                          <td colSpan={2} className="py-4 px-4">
+                            <div className="space-y-1">
+                              {Object.values(project.activities).map((activity) => (
+                                <div key={activity.name} className="text-sm text-gray-600">
+                                  {activity.name} ({activity.hours}h)
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <span className="text-sm font-medium text-gray-900">
+                              {project.totalHours}h
+                            </span>
+                          </td>
+                          <td colSpan={2}></td>
+                          <td className="py-4 px-4 text-right">
+                            <span className="text-sm font-medium text-blue-600">
+                              {project.projectCost.toLocaleString("fr-FR")} USD
+                            </span>
+                          </td>
+                          <td></td>
+                        </tr>
+                      ))}
+                    </>
+                  )}
+                </React.Fragment>
+              ))}
             </tbody>
           </table>
         </div>
