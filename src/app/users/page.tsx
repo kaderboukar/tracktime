@@ -6,7 +6,8 @@ import { registerSchema } from "@/lib/validation";
 import RoleBasedProtectedRoute from "@/components/RoleBasedProtectedRoute";
 import Navbar from "@/components/Navbar";
 import { toast } from 'sonner';
-import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
+import { generateUserImportTemplate } from '@/lib/excelTemplates';
 import {
   PlusIcon,
   PencilIcon,
@@ -14,6 +15,7 @@ import {
   UserGroupIcon,
   ExclamationTriangleIcon,
   ArrowUpTrayIcon,
+  ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 
 type UserProformaCost = {
@@ -43,16 +45,7 @@ type User = {
   signature: string;
 };
 
-type CSVRow = {
-  email: string;
-  password: string;
-  name: string;
-  indice: string;
-  grade: string;
-  type: string;
-  role: string;
-  [key: string]: string; // Pour les années et coûts dynamiques
-};
+
 
 export default function UsersPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -267,82 +260,127 @@ export default function UsersPage() {
     setIsModalOpen(true);
   };
 
-  const handleImportCSV = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDownloadTemplate = () => {
+    try {
+      generateUserImportTemplate();
+      toast.success("Template Excel téléchargé avec succès !");
+    } catch (error) {
+      console.error("Erreur lors du téléchargement du template:", error);
+      toast.error("Erreur lors du téléchargement du template");
+    }
+  };
+
+  const handleImportExcel = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== "text/csv") {
-      toast.error("Veuillez sélectionner un fichier CSV");
+    // Vérifier le type de fichier
+    const validTypes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel'
+    ];
+
+    if (!validTypes.includes(file.type) && !file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      toast.error("Veuillez sélectionner un fichier Excel (.xlsx ou .xls)");
       return;
     }
 
-    Papa.parse<CSVRow>(file, {
-      complete: async (results) => {
-        try {
-          const users = results.data.map((row) => {
-            const proformaCosts: UserProformaCost[] = [];
-            Object.entries(row).forEach(([key, value]) => {
-              if (key.startsWith('year') && value) {
-                const yearIndex = key.replace('year', '');
-                const costValue = row[`cost${yearIndex}`];
-                if (costValue) {
-                  proformaCosts.push({
-                    year: parseInt(value),
-                    cost: parseFloat(costValue)
-                  });
-                }
-              }
-            });
+    try {
+      // Lire le fichier Excel
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
-            return {
-              email: row.email,
-              password: row.password,
-              name: row.name,
-              indice: row.indice,
-              grade: row.grade,
-              type: row.type.toUpperCase() as "OPERATION" | "PROGRAMME" | "SUPPORT",
-              role: row.role.toUpperCase() as "ADMIN" | "PMSU" | "MANAGEMENT" | "STAFF",
-              proformaCosts
-            };
-          }).filter(user => user.email && user.name);
+      // Prendre la première feuille
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
 
-          const token = localStorage.getItem("token");
-          const res = await fetch("/api/user/import", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ users }),
-          });
+      // Convertir en JSON
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-          const data = await res.json();
+      if (jsonData.length < 2) {
+        toast.error("Le fichier Excel doit contenir au moins une ligne d'en-tête et une ligne de données");
+        return;
+      }
 
-          if (!res.ok) {
-            throw new Error(data.message);
+      // La première ligne contient les en-têtes
+      const headers = jsonData[0] as string[];
+      const rows = jsonData.slice(1) as unknown[][];
+
+      // Mapper les données
+      const users = rows.map((row) => {
+        const rowData: Record<string, unknown> = {};
+        headers.forEach((header, headerIndex) => {
+          rowData[header] = row[headerIndex];
+        });
+
+        // Extraire les coûts proforma
+        const proformaCosts: UserProformaCost[] = [];
+        Object.entries(rowData).forEach(([key, value]) => {
+          if (key.startsWith('year') && value) {
+            const yearIndex = key.replace('year', '');
+            const costValue = rowData[`cost${yearIndex}`];
+            if (costValue) {
+              proformaCosts.push({
+                year: parseInt(value as string),
+                cost: parseFloat(costValue as string)
+              });
+            }
           }
+        });
 
-          toast.success(data.message);
+        return {
+          email: String(rowData.email || ""),
+          password: String(rowData.password || "time2025trackingNiger"), // Mot de passe par défaut si non fourni
+          name: String(rowData.name || ""),
+          indice: String(rowData.indice || ""),
+          grade: String(rowData.grade || ""),
+          type: String(rowData.type || "OPERATION").toUpperCase() as "OPERATION" | "PROGRAMME" | "SUPPORT",
+          role: String(rowData.role || "STAFF").toUpperCase() as "ADMIN" | "PMSU" | "MANAGEMENT" | "STAFF",
+          proformaCosts
+        };
+      }).filter(user => user.email && user.name);
 
-          if (data.errors && data.errors.length > 0) {
-            data.errors.forEach((error: { row: number; message: string }) => {
-              toast.error(`Ligne ${error.row}: ${error.message}`);
-            });
-          }
+      if (users.length === 0) {
+        toast.error("Aucun utilisateur valide trouvé dans le fichier");
+        return;
+      }
 
-          await fetchUsers();
-        } catch (error) {
-          toast.error(
-            error instanceof Error
-              ? error.message
-              : "Erreur lors de l'importation"
-          );
-        }
-      },
-      header: true,
-      skipEmptyLines: true,
-    });
+      // Envoyer les données à l'API
+      const token = localStorage.getItem("token");
+      const res = await fetch("/api/user/import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ users }),
+      });
 
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message);
+      }
+
+      toast.success(data.message);
+
+      if (data.errors && data.errors.length > 0) {
+        data.errors.forEach((error: { row: number; message: string }) => {
+          toast.error(`Ligne ${error.row}: ${error.message}`);
+        });
+      }
+
+      await fetchUsers();
+    } catch (error) {
+      console.error("Erreur lors de l'importation Excel:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Erreur lors de l'importation du fichier Excel"
+      );
+    }
+
+    // Réinitialiser l'input file
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -422,12 +460,21 @@ export default function UsersPage() {
                 </h1>
               </div>
               <div className="flex items-center space-x-4">
+                <button
+                  onClick={handleDownloadTemplate}
+                  className="flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl
+                           hover:from-purple-700 hover:to-purple-800 transition-all duration-200 shadow-md hover:shadow-lg
+                           transform hover:-translate-y-0.5"
+                >
+                  <ArrowDownTrayIcon className="w-5 h-5 mr-2" />
+                  Template Excel
+                </button>
                 <div className="relative">
                   <input
                     type="file"
                     ref={fileInputRef}
-                    onChange={handleImportCSV}
-                    accept=".csv"
+                    onChange={handleImportExcel}
+                    accept=".xlsx,.xls"
                     className="hidden"
                   />
                   <button
@@ -437,7 +484,7 @@ export default function UsersPage() {
                              transform hover:-translate-y-0.5"
                   >
                     <ArrowUpTrayIcon className="w-5 h-5 mr-2" />
-                    Importer CSV
+                    Importer Excel
                   </button>
                 </div>
                 <button
