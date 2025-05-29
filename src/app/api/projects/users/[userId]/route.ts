@@ -14,13 +14,13 @@ interface AssignmentValidationResult {
 // Fonction de validation des assignations
 async function validateAssignment(userId: number, newPercentage: number): Promise<AssignmentValidationResult> {
   const existingAssignments = await prisma.userProject.findMany({
-    where: { 
+    where: {
       userId,
     }
   });
 
   const currentTotal = existingAssignments.reduce(
-    (sum, assignment) => sum + assignment.allocationPercentage, 
+    (sum, assignment) => sum + assignment.allocationPercentage,
     0
   );
 
@@ -87,7 +87,7 @@ export async function GET(
     });
 
     const totalAllocation = userProjects.reduce(
-      (sum, project) => sum + project.allocationPercentage, 
+      (sum, project) => sum + project.allocationPercentage,
       0
     );
 
@@ -110,13 +110,14 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
     const authResult = await authenticate(req);
     if (authResult instanceof NextResponse) return authResult;
 
-    const userId = parseInt(params.userId);
+    const { userId: userIdStr } = await params;
+    const userId = parseInt(userIdStr);
     if (isNaN(userId)) {
       return NextResponse.json(
         { success: false, message: "ID utilisateur invalide" },
@@ -129,9 +130,9 @@ export async function POST(
 
     if (!projectId || typeof allocationPercentage !== 'number' || allocationPercentage <= 0 || allocationPercentage > 100) {
       return NextResponse.json(
-        { 
-          success: false, 
-          message: "Les données d'assignation sont invalides" 
+        {
+          success: false,
+          message: "Les données d'assignation sont invalides"
         },
         { status: 400 }
       );
@@ -141,8 +142,8 @@ export async function POST(
 
     if (!validationResult.isValid) {
       return NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           message: validationResult.message,
           data: {
             currentTotal: validationResult.currentTotal,
@@ -181,9 +182,9 @@ export async function POST(
   } catch (error) {
     console.error("Erreur lors de la création de l'assignation:", error);
     return NextResponse.json(
-      { 
-        success: false, 
-        message: "Une erreur est survenue lors de la création de l'assignation" 
+      {
+        success: false,
+        message: "Une erreur est survenue lors de la création de l'assignation"
       },
       { status: 500 }
     );

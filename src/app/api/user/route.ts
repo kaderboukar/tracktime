@@ -4,11 +4,12 @@ import { PrismaClient } from "@prisma/client";
 import { authenticate, restrictTo } from "@/lib/auth";
 import { registerSchema } from "@/lib/validation";
 import bcrypt from "bcrypt";
+import { sendWelcomeEmail } from "@/lib/email";
 
 const prisma = new PrismaClient();
 
 export async function GET(req: NextRequest) {
-  const authResult = authenticate(req);
+  const authResult = await authenticate(req);
   if (authResult instanceof NextResponse) return authResult;
 
   try {
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = restrictTo("ADMIN")(req);
+  const authError = await restrictTo(req, "ADMIN");
   if (authError) return authError;
 
   const body = await req.json();
@@ -106,6 +107,19 @@ export async function POST(req: NextRequest) {
       });
     });
 
+    // Envoyer l'email de bienvenue avec les informations de connexion
+    try {
+      await sendWelcomeEmail({
+        name: user?.name || name,
+        email: user?.email || email,
+        password: password, // Mot de passe en clair pour l'email
+        role: user?.role || role || "STAFF"
+      });
+    } catch (emailError) {
+      console.error("Erreur lors de l'envoi de l'email de bienvenue:", emailError);
+      // Ne pas faire échouer la création de l'utilisateur si l'email échoue
+    }
+
     return NextResponse.json(
       { message: "Utilisateur créé", user },
       { status: 201 }
@@ -120,7 +134,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const authError = restrictTo("ADMIN")(req);
+  const authError = await restrictTo(req, "ADMIN");
   if (authError) return authError;
 
   const url = new URL(req.url);
@@ -145,11 +159,11 @@ export async function PUT(req: NextRequest) {
 
     // Vérifier l'email uniquement s'il est modifié
     if (body.email && body.email !== existingUser.email) {
-      const emailTaken = await prisma.user.findUnique({ 
-        where: { 
+      const emailTaken = await prisma.user.findUnique({
+        where: {
           email: body.email,
           NOT: { id }
-        } 
+        }
       });
       if (emailTaken) {
         return NextResponse.json(
@@ -161,11 +175,11 @@ export async function PUT(req: NextRequest) {
 
     // Vérifier l'indice uniquement s'il est modifié
     if (body.indice && body.indice !== existingUser.indice) {
-      const indiceTaken = await prisma.user.findUnique({ 
-        where: { 
+      const indiceTaken = await prisma.user.findUnique({
+        where: {
           indice: body.indice,
           NOT: { id }
-        } 
+        }
       });
       if (indiceTaken) {
         return NextResponse.json(
@@ -208,7 +222,7 @@ export async function PUT(req: NextRequest) {
       await prisma.userProformaCost.deleteMany({
         where: { userId: id }
       });
-      
+
       // Créer les nouveaux coûts
       interface ProformaCost {
         year: number;
@@ -245,7 +259,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const authError = restrictTo("ADMIN")(req);
+  const authError = await restrictTo(req, "ADMIN");
   if (authError) return authError;
 
   const { id } = await req.json();

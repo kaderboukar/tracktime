@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { TimeEntry } from "./types";
-import { ChartBarIcon, FunnelIcon } from "@heroicons/react/24/outline";
+import { ChartBarIcon, FunnelIcon, ArrowDownTrayIcon } from "@heroicons/react/24/outline";
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 type ProjectStats = {
   projectId: number;
   projectName: string;
@@ -18,8 +19,22 @@ type PeriodFilter = {
   year: number;
 };
 
+interface ProjectStatsData {
+  projectId: number;
+  projectName: string;
+  projectNumber: string;
+  year: number;
+  semester: string;
+  totalHours: number;
+  entriesCount: number;
+  usersCount: number;
+  activitiesCount: number;
+  totalCalculatedCost: number;
+  totalProformaCosts: number;
+}
+
 type ProjectsStatsProps = {
-  timeEntries: TimeEntry[];
+  projectStats: ProjectStatsData[];
   maxHoursPerSemester: number;
 };
 
@@ -31,15 +46,68 @@ const formatNumber = (num: number) => {
 };
 
 export function ProjectsStats({
-  timeEntries,
+  projectStats,
   maxHoursPerSemester,
 }: ProjectsStatsProps) {
-  // Obtenir la liste des années uniques des entrées
+
+  // États pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
+  // Fonction d'export Excel
+  const exportToExcel = async () => {
+    try {
+      // Import dynamique de XLSX
+      const XLSX = await import('xlsx');
+
+      // Préparer les données pour l'export
+      const exportData = filteredProjectStats.map((stat, index) => ({
+        'N°': index + 1,
+        'Projet': stat.projectName,
+        'Numéro': stat.projectNumber,
+        'Année': stat.year,
+        'Semestre': stat.semester,
+        'Heures': stat.totalHours,
+        'Coût Proforma Utilisateurs (USD)': Math.round(stat.totalProformaCost),
+        'Coût Calculé Projet (USD)': Math.round(stat.totalCost)
+      }));
+
+      // Créer le workbook et la worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+
+      // Ajuster la largeur des colonnes
+      const colWidths = [
+        { wch: 5 },   // N°
+        { wch: 30 },  // Projet (plus large)
+        { wch: 15 },  // Numéro (plus large)
+        { wch: 10 },  // Année
+        { wch: 12 },  // Semestre
+        { wch: 10 },  // Heures
+        { wch: 25 },  // Coût Proforma (plus large)
+        { wch: 20 }   // Coût Calculé (plus large)
+      ];
+      ws['!cols'] = colWidths;
+
+      // Ajouter la worksheet au workbook
+      XLSX.utils.book_append_sheet(wb, ws, 'Statistiques Projets');
+
+      // Générer le nom du fichier
+      const fileName = `Statistiques_Projets_${filter.year}_${filter.semester}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      // Télécharger le fichier
+      XLSX.writeFile(wb, fileName);
+
+    } catch (error) {
+      console.error('Erreur lors de l\'export Excel:', error);
+      alert('Erreur lors de l\'export Excel');
+    }
+  };
+  // Obtenir la liste des années uniques des statistiques
   const years = useMemo(() => {
-    const uniqueYears = [...new Set(timeEntries.map((entry) => entry.year))];
-    console.log("Unique Years:", uniqueYears); // Log des années uniques
+    const uniqueYears = [...new Set(projectStats.map((stat) => stat.year))];
     return uniqueYears.sort((a, b) => b - a); // Tri décroissant
-  }, [timeEntries]);
+  }, [projectStats]);
 
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth();
@@ -50,82 +118,38 @@ export function ProjectsStats({
     year: currentYear,
   });
 
-  console.log("Filter:", filter); // Log du filtre
 
-  const projectStats = useMemo(() => {
-    console.log("Time Entries:", timeEntries); // Log des entrées de temps
+  const filteredProjectStats = useMemo(() => {
 
     // Filtrer par période uniquement
-    const filteredEntries = timeEntries.filter(
-      (entry) =>
-        entry.semester === filter.semester && entry.year === filter.year
+    const filteredStats = projectStats.filter(
+      (stat) =>
+        stat.semester === filter.semester && stat.year === filter.year
     );
-    console.log("Filtered Entries:", filteredEntries); // Log des entrées filtrées
 
-    // Grouper par projet et calculer les totaux
-    const projectGroups = filteredEntries.reduce(
-      (acc: { [key: number]: ProjectStats }, entry) => {
-        if (!acc[entry.projectId]) {
-          acc[entry.projectId] = {
-            projectId: entry.projectId,
-            projectName: entry.project.name,
-            projectNumber: entry.project.projectNumber,
-            totalHours: 0,
-            totalPercentage: 0,
-            totalCost: 0,
-            totalProformaCost: 0,
-            entries: [],
-          };
-        }
-
-        // Ajouter toutes les heures sans filtrer par utilisateur
-        acc[entry.projectId].totalHours += entry.hours;
-        acc[entry.projectId].entries.push(entry);
-
-        return acc;
-      },
-      {}
-    );
-    console.log("Project Groups:", projectGroups); // Log des groupes de projets
-
-    // Calculer les coûts proforma pour chaque projet
-    Object.values(projectGroups).forEach((project) => {
-      const uniqueUsersMap = new Map();
-      project.entries.forEach((e) => {
-        if (!uniqueUsersMap.has(e.user.id)) {
-          uniqueUsersMap.set(e.user.id, e.user.proformaCost);
-        } else {
-          uniqueUsersMap.set(
-            e.user.id,
-            uniqueUsersMap.get(e.user.id) + e.user.proformaCost
-          );
-        }
-      });
-
-      // Somme des coûts proforma de tous les utilisateurs uniques
-      project.totalProformaCost = Array.from(uniqueUsersMap.values()).reduce(
-        (sum, cost) => sum + cost,
-        0
-      );
-
-      console.log(
-        `Total Proforma Cost for project ${project.projectId}:`,
-        project.totalProformaCost
-      ); // Log du coût proforma total pour le projet
-    });
-
-    // Calculer les pourcentages et coûts finaux
-    const finalStats = Object.values(projectGroups).map((project) => ({
-      ...project,
-      totalPercentage: (project.totalHours / maxHoursPerSemester) * 100,
-      totalCost:
-        (project.totalProformaCost / 2) *
-        (project.totalHours / maxHoursPerSemester),
+    // Utiliser les calculs de l'API et calculer les pourcentages
+    const finalStats = filteredStats.map((stat) => ({
+      ...stat,
+      totalPercentage: (stat.totalHours / maxHoursPerSemester) * 100,
+      // Utiliser les calculs de l'API
+      totalCost: stat.totalCalculatedCost || 0,
+      totalProformaCost: stat.totalProformaCosts || 0,
+      entries: [], // Pas d'entrées détaillées dans les nouvelles données
     }));
-    console.log("Final Project Stats:", finalStats); // Log des statistiques finales des projets
-
     return finalStats;
-  }, [timeEntries, filter, maxHoursPerSemester]);
+  }, [projectStats, filter, maxHoursPerSemester]);
+
+  // Pagination des données
+  const totalItems = filteredProjectStats.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedData = filteredProjectStats.slice(startIndex, endIndex);
+
+  // Réinitialiser la page quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter]);
 
   return (
     <div className="space-y-6">
@@ -139,7 +163,7 @@ export function ProjectsStats({
           </h2>
         </div>
 
-        {/* Filtres */}
+        {/* Filtres et Export */}
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <FunnelIcon className="w-5 h-5 text-gray-400" />
@@ -170,6 +194,20 @@ export function ProjectsStats({
               <option value="S2">S2</option>
             </select>
           </div>
+
+          {/* Bouton Export */}
+          <button
+            onClick={exportToExcel}
+            disabled={filteredProjectStats.length === 0}
+            className="flex items-center px-3 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg
+                     hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-md hover:shadow-lg
+                     transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none
+                     text-sm font-medium"
+            title="Exporter les statistiques en Excel"
+          >
+            <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+            Exporter
+          </button>
         </div>
       </div>
 
@@ -194,18 +232,18 @@ export function ProjectsStats({
               </th>
               <th className="pb-3 px-4 text-right">
                 <span className="text-xs font-medium text-gray-500 uppercase">
-                  Coût proforma total
+                  Coût Proforma Utilisateurs
                 </span>
               </th>
               <th className="pb-3 px-4 text-right">
                 <span className="text-xs font-medium text-gray-500 uppercase">
-                  Coût du projet
+                  Coût Calculé Projet
                 </span>
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {projectStats.map((stat) => (
+            {paginatedData.map((stat) => (
               <tr
                 key={stat.projectNumber}
                 className="group hover:bg-gray-50/50"
@@ -219,7 +257,7 @@ export function ProjectsStats({
                       {stat.projectNumber}
                     </p>
                     <p className="text-xs text-gray-400 mt-1">
-                      {stat.entries.length} entrées
+                      {stat.entriesCount} entrées
                     </p>
                   </div>
                 </td>
@@ -244,12 +282,12 @@ export function ProjectsStats({
                 </td>
                 <td className="py-4 px-4 text-right">
                   <span className="text-sm font-medium text-gray-900">
-                    ${formatNumber(stat.totalProformaCost)}
+                    {formatNumber(stat.totalProformaCost)} USD
                   </span>
                 </td>
                 <td className="py-4 px-4 text-right">
                   <span className="text-sm font-medium text-green-600">
-                    ${formatNumber(stat.totalCost)}
+                    ${formatNumber(stat.totalCost)} USD
                   </span>
                 </td>
               </tr>
@@ -257,6 +295,48 @@ export function ProjectsStats({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 bg-white/50 backdrop-blur-xl rounded-lg border border-white/50">
+          <div className="flex items-center text-sm text-gray-700">
+            <span>
+              Affichage de {startIndex + 1} à {Math.min(endIndex, totalItems)} sur {totalItems} projets
+            </span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Précédent
+            </button>
+            <div className="flex items-center space-x-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`px-3 py-1 text-sm rounded-md ${
+                    currentPage === page
+                      ? 'bg-blue-600 text-white'
+                      : 'border border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Suivant
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

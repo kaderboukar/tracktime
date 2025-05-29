@@ -6,13 +6,14 @@ const prisma = new PrismaClient();
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = authenticate(request);
+  const authResult = await authenticate(request);
   if (authResult instanceof NextResponse) return authResult;
 
   try {
-    const userId = parseInt(params.id);
+    const { id } = await params;
+    const userId = parseInt(id);
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -50,12 +51,13 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const authError = restrictTo("ADMIN")(req);
+  const authError = await restrictTo(req, "ADMIN");
   if (authError) return authError;
 
-  const id = parseInt(params.id);
+  const { id: idString } = await params;
+  const id = parseInt(idString);
   if (!id || isNaN(id)) {
     return NextResponse.json(
       { message: "ID invalide" },
@@ -71,7 +73,7 @@ export async function PUT(
         proformaCosts: true
       }
     });
-    
+
     if (!existingUser) {
       return NextResponse.json(
         { message: "Utilisateur non trouvé" },
@@ -152,6 +154,94 @@ export async function PUT(
     console.error("Erreur de mise à jour:", error);
     return NextResponse.json(
       { message: "Erreur lors de la mise à jour de l'utilisateur" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authError = await restrictTo(req, "ADMIN");
+  if (authError) return authError;
+
+  try {
+    const { id: idString } = await params;
+    const id = parseInt(idString);
+
+    if (!id || isNaN(id)) {
+      return NextResponse.json(
+        { message: "ID invalide" },
+        { status: 400 }
+      );
+    }
+
+    // Vérifier si l'utilisateur existe
+    const existingUser = await prisma.user.findUnique({
+      where: { id },
+      include: {
+        timeEntries: true,
+        proformaCosts: true,
+        projects: true,
+      }
+    });
+
+    if (!existingUser) {
+      return NextResponse.json(
+        { message: "Utilisateur non trouvé" },
+        { status: 404 }
+      );
+    }
+
+    // Vérifier s'il y a des données liées
+    const hasTimeEntries = existingUser.timeEntries.length > 0;
+    const hasProjectAssignments = existingUser.projects.length > 0;
+
+    if (hasTimeEntries || hasProjectAssignments) {
+      return NextResponse.json(
+        {
+          message: "Impossible de supprimer cet utilisateur car il a des entrées de temps ou des assignations de projet. Vous pouvez le désactiver à la place."
+        },
+        { status: 400 }
+      );
+    }
+
+    // Supprimer l'utilisateur et ses données liées dans une transaction
+    await prisma.$transaction(async (tx) => {
+      // Supprimer les coûts proforma
+      await tx.userProformaCost.deleteMany({
+        where: { userId: id }
+      });
+
+      // Supprimer l'utilisateur
+      await tx.user.delete({
+        where: { id }
+      });
+    });
+
+    return NextResponse.json({
+      message: "Utilisateur supprimé avec succès"
+    });
+
+  } catch (error) {
+    console.error("Erreur lors de la suppression de l'utilisateur:", error);
+
+    // Gestion des erreurs de contrainte de clé étrangère
+    if (error instanceof Error && error.message.includes('foreign key constraint')) {
+      return NextResponse.json(
+        {
+          message: "Impossible de supprimer cet utilisateur car il est référencé dans d'autres données. Vous pouvez le désactiver à la place."
+        },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        message: "Erreur lors de la suppression de l'utilisateur",
+        error: process.env.NODE_ENV === "development" ? (error as Error).message : undefined
+      },
       { status: 500 }
     );
   }

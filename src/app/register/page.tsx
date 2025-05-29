@@ -16,7 +16,11 @@ export default function RegisterPage() {
     name: "",
     indice: "",
     grade: "",
-    proformaCost: 0,
+    proformaCosts: [{ year: new Date().getFullYear(), cost: 0 }],
+    type: "OPERATION",
+    role: "STAFF",
+    isActive: true,
+    signature: "",
   });
   const [errors, setErrors] = useState<Errors>({});
   const [message, setMessage] = useState<string>("");
@@ -135,17 +139,20 @@ export default function RegisterPage() {
             type="number"
             step="0.01"
             placeholder="Coût proforma"
-            value={formData.proformaCost || ""}
+            value={formData.proformaCosts[0]?.cost || ""}
             onChange={(e) =>
               setFormData({
                 ...formData,
-                proformaCost: parseFloat(e.target.value) || 0,
+                proformaCosts: [{
+                  year: formData.proformaCosts[0]?.year || new Date().getFullYear(),
+                  cost: parseFloat(e.target.value) || 0
+                }],
               })
             }
             className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          {errors.proformaCost && (
-            <p className="text-red-500 text-sm mt-1">{errors.proformaCost}</p>
+          {errors.proformaCosts && (
+            <p className="text-red-500 text-sm mt-1">{errors.proformaCosts}</p>
           )}
         </div>
         <button

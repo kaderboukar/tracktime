@@ -5,7 +5,7 @@ import { authenticate, getUserIdFromToken } from "@/lib/auth";
 const prisma = new PrismaClient();
 
 export async function GET(request: NextRequest) {
-  const authResult = authenticate(request);
+  const authResult = await authenticate(request);
   if (authResult instanceof NextResponse) return authResult;
 
   try {
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Erreur dans /api/projects/available:", error);
     return NextResponse.json(
-      { 
+      {
         success: false,
         message: "Erreur serveur",
         error: process.env.NODE_ENV === "development" ? error : undefined

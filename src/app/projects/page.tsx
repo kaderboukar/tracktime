@@ -11,6 +11,7 @@ import {
   PencilIcon,
   TrashIcon,
   FolderIcon,
+  ArrowUpTrayIcon,
 } from "@heroicons/react/24/outline";
 import ConfirmationModal from "@/components/ConfirmationModal";
 
@@ -46,6 +47,13 @@ export default function ProjectsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
   const [deleteProjectId, setDeleteProjectId] = useState<number | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importProgress, setImportProgress] = useState<{
+    total: number;
+    processed: number;
+    errors: string[];
+  } | null>(null);
 
   const fetchProjects = async () => {
     try {
@@ -187,6 +195,112 @@ export default function ProjectsPage() {
     setIsProjectModalOpen(true);
   };
 
+  const handleImportExcel = async () => {
+    if (!importFile) {
+      setMessage("Veuillez sélectionner un fichier Excel");
+      return;
+    }
+
+    try {
+      // Dynamically import xlsx to avoid SSR issues
+      const XLSX = await import('xlsx');
+
+      const data = await importFile.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+      // Skip header row and process data
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rows = jsonData.slice(1) as any[][];
+      const projectsToImport = rows
+        .filter(row => row.length >= 2 && row[0] && row[1]) // At least name and projectNumber
+        .map(row => ({
+          name: String(row[0]).trim(),
+          projectNumber: String(row[1]).trim(),
+          projectType: "", // Type vide par défaut
+          staffAccess: row[2] && ["ALL", "OPERATION", "PROGRAMME", "SUPPORT"].includes(String(row[2]).trim())
+            ? String(row[2]).trim() as "ALL" | "OPERATION" | "PROGRAMME" | "SUPPORT"
+            : "ALL"
+        }));
+
+      if (projectsToImport.length === 0) {
+        setMessage("Aucun projet valide trouvé dans le fichier Excel");
+        return;
+      }
+
+
+      setImportProgress({
+        total: projectsToImport.length,
+        processed: 0,
+        errors: []
+      });
+
+      // Import projects one by one
+      const token = localStorage.getItem("token");
+      const errors: string[] = [];
+      let processed = 0;
+
+      for (const project of projectsToImport) {
+        try {
+
+          const res = await fetch("/api/projects", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(project),
+          });
+
+
+          if (!res.ok) {
+            const errorData = await res.json();
+            errors.push(`${project.name}: ${errorData.message || 'Erreur inconnue'}`);
+          }
+
+          processed++;
+          setImportProgress(prev => prev ? {
+            ...prev,
+            processed,
+            errors
+          } : null);
+
+        } catch (error) {
+          console.error("Erreur réseau:", error);
+          errors.push(`${project.name}: Erreur de réseau - ${error}`);
+          processed++;
+          setImportProgress(prev => prev ? {
+            ...prev,
+            processed,
+            errors
+          } : null);
+        }
+      }
+
+      // Show final result
+      const successCount = processed - errors.length;
+      setMessage(`Importation terminée: ${successCount} projets créés, ${errors.length} erreurs`);
+
+      if (successCount > 0) {
+        fetchProjects();
+      }
+
+      // Reset import state
+      setTimeout(() => {
+        setImportProgress(null);
+        setImportFile(null);
+        setIsImportModalOpen(false);
+      }, 3000);
+
+    } catch (error) {
+      console.error("Erreur lors de l'importation:", error);
+      setMessage("Erreur lors de la lecture du fichier Excel");
+      setImportProgress(null);
+    }
+  };
+
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentProjects = projects.slice(indexOfFirstItem, indexOfLastItem);
@@ -212,7 +326,7 @@ export default function ProjectsPage() {
 
             {/* Effet de brillance */}
             <div
-              className="absolute inset-0 rounded-full bg-gradient-to-r from-transparent via-white/30 to-transparent 
+              className="absolute inset-0 rounded-full bg-gradient-to-r from-transparent via-white/30 to-transparent
                             opacity-0 group-hover:opacity-100 transition-opacity duration-700"
             ></div>
           </div>
@@ -247,15 +361,26 @@ export default function ProjectsPage() {
                   Gestion des Projets
                 </h1>
               </div>
-              <button
-                onClick={openCreateModal}
-                className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl
-                         hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg
-                         transform hover:-translate-y-0.5"
-              >
-                <PlusIcon className="w-5 h-5 mr-2" />
-                Nouveau Projet
-              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="flex items-center px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl
+                           hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-md hover:shadow-lg
+                           transform hover:-translate-y-0.5"
+                >
+                  <ArrowUpTrayIcon className="w-5 h-5 mr-2" />
+                  Importer
+                </button>
+                <button
+                  onClick={openCreateModal}
+                  className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl
+                           hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg
+                           transform hover:-translate-y-0.5"
+                >
+                  <PlusIcon className="w-5 h-5 mr-2" />
+                  Nouveau Projet
+                </button>
+              </div>
             </div>
           </div>
 
@@ -306,7 +431,7 @@ export default function ProjectsPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-3">
                           <div
-                            className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg 
+                            className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg
                                       group-hover:scale-110 transition-transform duration-300"
                           >
                             <FolderIcon className="w-4 h-4 text-white" />
@@ -321,7 +446,7 @@ export default function ProjectsPage() {
                           {project.projectNumber}
                         </span>
                       </td>
-                      
+
                       <td className="px-6 py-4">
                         <span className="text-sm text-gray-600">
                           {project.staffAccess}
@@ -546,6 +671,104 @@ export default function ProjectsPage() {
                     <p className="text-sm text-center">{message}</p>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Import Modal */}
+          {isImportModalOpen && (
+            <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex justify-center items-center z-50 transition-all duration-300">
+              <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl w-full max-w-md p-8 transform transition-all duration-300 ease-out scale-100 opacity-100 border border-white/20">
+                <div className="mb-8">
+                  <h2 className="text-2xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+                    Importer des projets
+                  </h2>
+                  <p className="text-gray-500 mt-2 text-sm">
+                    Sélectionnez un fichier Excel (.xlsx) contenant les projets à importer
+                  </p>
+                </div>
+
+                <div className="space-y-6">
+                  {/* File Input */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">
+                      Fichier Excel
+                    </label>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                      className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/40 focus:border-green-500 transition-all duration-200 bg-white/50 backdrop-blur-sm"
+                    />
+                    <p className="text-xs text-gray-500">
+                      Format attendu: Nom | Numéro | Accès Staff
+                    </p>
+                  </div>
+
+                  {/* Progress */}
+                  {importProgress && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Progression</span>
+                        <span>{importProgress.processed}/{importProgress.total}</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${(importProgress.processed / importProgress.total) * 100}%` }}
+                        />
+                      </div>
+                      {importProgress.errors.length > 0 && (
+                        <div className="mt-2 p-2 bg-red-50 rounded-lg">
+                          <p className="text-xs text-red-600 font-medium">Erreurs:</p>
+                          <ul className="text-xs text-red-600 mt-1 space-y-1">
+                            {importProgress.errors.slice(0, 3).map((error, index) => (
+                              <li key={index}>• {error}</li>
+                            ))}
+                            {importProgress.errors.length > 3 && (
+                              <li>• ... et {importProgress.errors.length - 3} autres erreurs</li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Template Download */}
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-blue-700 font-medium">💡 Modèle Excel</p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      Première ligne: en-têtes (Nom, Numéro, Accès Staff)<br/>
+                      Lignes suivantes: données des projets
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-3 mt-8 pt-4 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsImportModalOpen(false);
+                      setImportFile(null);
+                      setImportProgress(null);
+                    }}
+                    disabled={importProgress !== null}
+                    className="px-6 py-2.5 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-300/40 disabled:opacity-50"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleImportExcel}
+                    disabled={!importFile || importProgress !== null}
+                    className="px-6 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl
+                             hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-md hover:shadow-lg
+                             transform hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-green-500/40
+                             disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  >
+                    {importProgress ? 'Importation...' : 'Importer'}
+                  </button>
+                </div>
               </div>
             </div>
           )}

@@ -26,7 +26,7 @@ type ImportError = {
 };
 
 export async function POST(req: NextRequest) {
-  const authError = restrictTo("ADMIN")(req);
+  const authError = await restrictTo(req, "ADMIN");
   if (authError) return authError;
 
   try {

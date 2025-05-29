@@ -50,7 +50,13 @@ export async function GET(req: NextRequest) {
     const authResult = await authenticate(req);
     if (authResult instanceof NextResponse) return authResult;
 
+    const { userId } = authResult;
+
+    // Récupérer uniquement les assignations de l'utilisateur connecté
     const assignments = await prisma.userProject.findMany({
+      where: {
+        userId: userId
+      },
       include: {
         user: {
           select: {

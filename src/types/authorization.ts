@@ -6,12 +6,8 @@ export interface AuthResult {
   role: Role;
 }
 
-export const ASSIGNMENT_MANAGERS: Role[] = ["ADMIN", "PMSU", "MANAGEMENT"];
+export const ASSIGNMENT_MANAGERS: Role[] = ["ADMIN", "PMSU"];
 
 export function isAuthorizedForAssignments(role: Role): boolean {
   return ASSIGNMENT_MANAGERS.includes(role);
-}
-
-export function isAuthorizedForAssignments(role: Role): boolean {
-  return ASSIGNMENT_MANAGERS.includes(role as AuthorizedRoles);
 }

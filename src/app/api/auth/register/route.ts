@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { email, password, name, indice, grade, proformaCost } = result.data;
+  const { email, password, name, indice, grade, proformaCosts } = result.data;
 
   try {
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -45,7 +45,10 @@ export async function POST(req: NextRequest) {
         name,
         indice,
         grade,
-        proformaCost,
+        signature: "", // Signature vide par défaut
+        proformaCosts: {
+          create: proformaCosts
+        }
       },
     });
 

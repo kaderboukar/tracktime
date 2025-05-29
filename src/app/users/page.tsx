@@ -253,7 +253,7 @@ export default function UsersPage() {
     setEditUser(null);
     setFormData({
       email: "",
-      password: "123456789",
+      password: "time2025trackingNiger",
       name: "",
       indice: "",
       grade: "",
@@ -323,7 +323,7 @@ export default function UsersPage() {
           }
 
           toast.success(data.message);
-          
+
           if (data.errors && data.errors.length > 0) {
             data.errors.forEach((error: { row: number; message: string }) => {
               toast.error(`Ligne ${error.row}: ${error.message}`);
@@ -360,7 +360,7 @@ export default function UsersPage() {
   const handleAddProformaCost = () => {
     const currentYear = new Date().getFullYear();
     const existingYears = formData.proformaCosts.map(cost => cost.year);
-    
+
     let nextYear = currentYear;
     while (existingYears.includes(nextYear)) {
       nextYear++;
@@ -399,7 +399,7 @@ export default function UsersPage() {
 
     setFormData(prev => ({
       ...prev,
-      proformaCosts: prev.proformaCosts.map((cost, i) => 
+      proformaCosts: prev.proformaCosts.map((cost, i) =>
         i === index ? { ...cost, [field]: value } : cost
       )
     }));
@@ -1032,6 +1032,7 @@ export default function UsersPage() {
                           Signature
                         </h3>
                         <div className="bg-gray-50 rounded-xl p-4">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={selectedUser.signature}
                             alt="Signature de l'utilisateur"

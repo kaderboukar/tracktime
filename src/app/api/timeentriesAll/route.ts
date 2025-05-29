@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authenticate } from "@/lib/auth";
+import { ValidationStatus } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
       return authResult;
     }
 
-    const { userId, role } = authResult;
+    const { role } = authResult;
 
     // Vérification supplémentaire pour s'assurer que seuls les administrateurs peuvent voir toutes les entrées
     if (role !== "ADMIN") {
@@ -30,15 +31,14 @@ export async function GET(request: NextRequest) {
     const year = searchParams.get("year");
     const semester = searchParams.get("semester");
 
-    // Construire la requête avec les filtres
+    // Construire la requête avec les filtres et le statut APPROVED
     const where = {
+      status: ValidationStatus.APPROVED,
       ...(year && semester ? {
         year: parseInt(year),
         semester: semester as "S1" | "S2"
       } : {})
     };
-
-    console.log("Filtres de recherche:", where);
 
     const timeEntries = await prisma.timeEntry.findMany({
       where,
@@ -84,7 +84,6 @@ export async function GET(request: NextRequest) {
       }
     }));
 
-    console.log("Nombre d'entrées trouvées:", transformedEntries.length);
 
     return NextResponse.json({
       success: true,

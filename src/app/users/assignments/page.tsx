@@ -6,7 +6,7 @@ import { Combobox, Transition } from "@headlessui/react";
 import { CheckIcon, ChevronUpDownIcon } from "@heroicons/react/20/solid";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Navbar from "@/components/Navbar";
-import { PlusIcon, TrashIcon, ArrowDownTrayIcon, ArrowUpTrayIcon } from "@heroicons/react/24/outline";
+import { TrashIcon, ArrowDownTrayIcon, ArrowUpTrayIcon, PencilIcon } from "@heroicons/react/24/outline";
 
 interface FormData {
   userId: number;
@@ -65,10 +65,11 @@ export default function UserAssignmentsPage() {
   const [projectQuery, setProjectQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [validationInfo, setValidationInfo] = useState<ValidationResponse["data"]>();
+  const [isEditing, setIsEditing] = useState(false);
 
   const filteredUsers = userQuery === ""
     ? users
-    : users.filter((user) => 
+    : users.filter((user) =>
         user.name.toLowerCase().includes(userQuery.toLowerCase()) ||
         user.indice.toLowerCase().includes(userQuery.toLowerCase())
       );
@@ -94,18 +95,18 @@ export default function UserAssignmentsPage() {
 
     try {
       const res = await fetch("/api/user", {
-        headers: { 
+        headers: {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"
         }
       });
-      
+
       if (!res.ok) {
         throw new Error("Erreur lors de la récupération des utilisateurs");
       }
 
       const data = await res.json();
-      
+
       const usersWithProjects = await Promise.all(
         data.map(async (user: { id: number; name: string; indice: string }, index: number) => {
           try {
@@ -143,7 +144,7 @@ export default function UserAssignmentsPage() {
       console.error("Pas de token trouvé");
       return;
     }
-    
+
     try {
       const res = await fetch("/api/projects", {
         headers: {
@@ -163,13 +164,13 @@ export default function UserAssignmentsPage() {
   const handleUserSelect = (user: User) => {
     setSelectedUser(user);
     setFormData(prev => ({ ...prev, userId: user.id }));
-    
+
     // Calculer le total des assignations actuelles
     const totalAllocation = user.projects.reduce(
-      (sum, p) => sum + p.allocationPercentage, 
+      (sum, p) => sum + p.allocationPercentage,
       0
     );
-    
+
     setValidationInfo({
       totalAllocation,
       remainingAllocation: 100 - totalAllocation
@@ -179,7 +180,7 @@ export default function UserAssignmentsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
-    
+
     if (!formData.userId || !formData.projectId || !formData.allocationPercentage) {
       setErrors({
         userId: !formData.userId ? "Veuillez sélectionner un utilisateur" : undefined,
@@ -231,7 +232,7 @@ export default function UserAssignmentsPage() {
 
       // Rafraîchir les données
       await fetchUsers();
-      
+
       // Réinitialiser le formulaire
       setFormData({
         userId: selectedUser?.id || 0,
@@ -242,6 +243,87 @@ export default function UserAssignmentsPage() {
     } catch (error) {
       console.error("Erreur:", error);
       setMessage({ text: "Erreur lors de la création de l'assignation", type: 'error' });
+    }
+  };
+
+  const handleEdit = (userId: number, projectId: number, allocationPercentage: number) => {
+    setIsEditing(true);
+    setFormData({
+      userId,
+      projectId,
+      allocationPercentage
+    });
+
+    // Sélectionner l'utilisateur correspondant
+    const user = users.find(u => u.id === userId);
+    if (user) {
+      setSelectedUser(user);
+      handleUserSelect(user);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setFormData({
+      userId: selectedUser?.id || 0,
+      projectId: 0,
+      allocationPercentage: 0
+    });
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrors({});
+
+    if (!formData.userId || !formData.projectId || !formData.allocationPercentage) {
+      setErrors({
+        userId: !formData.userId ? "Veuillez sélectionner un utilisateur" : undefined,
+        projectId: !formData.projectId ? "Veuillez sélectionner un projet" : undefined,
+        allocationPercentage: !formData.allocationPercentage ? "Veuillez spécifier un pourcentage" : undefined,
+      });
+      return;
+    }
+
+    if (formData.allocationPercentage <= 0 || formData.allocationPercentage > 100) {
+      setErrors({
+        allocationPercentage: "Le pourcentage doit être entre 1 et 100"
+      });
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setMessage({ text: "Vous devez être connecté pour effectuer cette action", type: 'error' });
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/projects/${formData.projectId}/users`, {
+        method: "PATCH",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          userId: formData.userId,
+          allocationPercentage: formData.allocationPercentage
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMessage({ text: data.message, type: 'error' });
+        return;
+      }
+
+      setMessage({ text: "Assignation mise à jour avec succès", type: 'success' });
+      await fetchUsers();
+      handleCancelEdit();
+
+    } catch (error) {
+      console.error("Erreur:", error);
+      setMessage({ text: "Erreur lors de la mise à jour de l'assignation", type: 'error' });
     }
   };
 
@@ -301,7 +383,7 @@ export default function UserAssignmentsPage() {
 
       // Créer un blob à partir de la réponse
       const blob = await response.blob();
-      
+
       // Créer un lien de téléchargement
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -346,9 +428,9 @@ export default function UserAssignmentsPage() {
         throw new Error(data.message || "Erreur lors de l'import");
       }
 
-      setMessage({ 
-        text: `Import terminé : ${data.results.success} assignations importées avec succès${data.results.errors.length > 0 ? `, ${data.results.errors.length} erreurs` : ''}`, 
-        type: data.results.errors.length > 0 ? 'error' : 'success' 
+      setMessage({
+        text: `Import terminé : ${data.results.success} assignations importées avec succès${data.results.errors.length > 0 ? `, ${data.results.errors.length} erreurs` : ''}`,
+        type: data.results.errors.length > 0 ? 'error' : 'success'
       });
 
       // Rafraîchir les données
@@ -376,7 +458,9 @@ export default function UserAssignmentsPage() {
         <div className="container mx-auto px-4 py-8">
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-semibold">Assignation des Projets aux Utilisateurs</h2>
+              <h2 className="text-2xl font-semibold">
+                {isEditing ? "Modifier l'Assignation" : "Assignation des Projets aux Utilisateurs"}
+              </h2>
               <div className="flex space-x-4">
                 <label className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 cursor-pointer">
                   <ArrowUpTrayIcon className="h-5 w-5 mr-2" />
@@ -397,7 +481,7 @@ export default function UserAssignmentsPage() {
                 </button>
               </div>
             </div>
-            
+
             {message.text && (
               <div className={`p-4 mb-4 rounded ${
                 message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
@@ -406,7 +490,7 @@ export default function UserAssignmentsPage() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={isEditing ? handleUpdate : handleSubmit} className="space-y-4">
               {/* Sélection de l'utilisateur */}
               <div>
                 <label className="block text-sm font-medium text-gray-700">Utilisateur</label>
@@ -576,22 +660,42 @@ export default function UserAssignmentsPage() {
               </div>
 
               <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormData({ userId: selectedUser?.id || 0, projectId: 0, allocationPercentage: 0 });
-                    setErrors({});
-                  }}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Réinitialiser
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
-                >
-                  Assigner
-                </button>
+                {isEditing ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Mettre à jour
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormData({ userId: selectedUser?.id || 0, projectId: 0, allocationPercentage: 0 });
+                        setErrors({});
+                      }}
+                      className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Réinitialiser
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                    >
+                      Assigner
+                    </button>
+                  </>
+                )}
               </div>
             </form>
           </div>
@@ -601,7 +705,7 @@ export default function UserAssignmentsPage() {
             <div className="p-4 border-b">
               <h3 className="text-lg font-medium">Liste des Assignations</h3>
             </div>
-            
+
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -615,9 +719,6 @@ export default function UserAssignmentsPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Total
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -626,7 +727,7 @@ export default function UserAssignmentsPage() {
                       (sum, p) => sum + p.allocationPercentage,
                       0
                     );
-                    
+
                     return (
                       <tr key={`user-row-${user.id}`}>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -643,9 +744,9 @@ export default function UserAssignmentsPage() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="space-y-2">
-                            {user.projects.map((assignment) => (
-                              <div 
-                                key={`assignment-${assignment.userId_projectId}`}
+                            {user.projects.map((assignment, index) => (
+                              <div
+                                key={`assignment-${user.id}-${assignment.project.id}-${index}`}
                                 className="flex items-center justify-between text-sm"
                               >
                                 <span className="font-medium text-gray-900">
@@ -653,15 +754,23 @@ export default function UserAssignmentsPage() {
                                 </span>
                                 <div className="flex items-center space-x-2">
                                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                    totalAllocation === 100 
+                                    totalAllocation === 100
                                       ? 'bg-green-100 text-green-800'
                                       : 'bg-yellow-100 text-yellow-800'
                                   }`}>
                                     {assignment.allocationPercentage}%
                                   </span>
                                   <button
+                                    onClick={() => handleEdit(user.id, assignment.project.id, assignment.allocationPercentage)}
+                                    className="text-blue-600 hover:text-blue-900"
+                                    title="Modifier l'assignation"
+                                  >
+                                    <PencilIcon className="h-4 w-4" />
+                                  </button>
+                                  <button
                                     onClick={() => handleDelete(user.id, assignment.project.id)}
                                     className="text-red-600 hover:text-red-900"
+                                    title="Supprimer l'assignation"
                                   >
                                     <TrashIcon className="h-4 w-4" />
                                   </button>
@@ -672,7 +781,7 @@ export default function UserAssignmentsPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            totalAllocation === 100 
+                            totalAllocation === 100
                               ? 'bg-green-100 text-green-800'
                               : totalAllocation > 100
                                 ? 'bg-red-100 text-red-800'
@@ -680,14 +789,6 @@ export default function UserAssignmentsPage() {
                           }`}>
                             {totalAllocation}%
                           </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                          <button
-                            onClick={() => handleUserSelect(user)}
-                            className="text-teal-600 hover:text-teal-900"
-                          >
-                            <PlusIcon className="h-5 w-5" />
-                          </button>
                         </td>
                       </tr>
                     );

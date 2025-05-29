@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Toaster, toast } from 'sonner';
-import { ClockIcon, PencilIcon, TrashIcon, EyeIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, PencilIcon, TrashIcon, EyeIcon } from '@heroicons/react/24/outline';
 import Navbar from "@/components/Navbar";
 import ViewTimeEntryModal from "@/components/ViewTimeEntryModal";
 import ConfirmationModal from "@/components/ConfirmationModal";
@@ -117,6 +117,7 @@ export default function TimeEntriesPage() {
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -141,7 +142,7 @@ export default function TimeEntriesPage() {
 
   // Fonction pour vérifier si une combinaison année/semestre est déjà enregistrée
   const isYearSemesterRegistered = (year: number, semester: "S1" | "S2") => {
-    return existingYearSemesters.some(ys => 
+    return existingYearSemesters.some(ys =>
       ys.year === year && ys.semester === semester
     );
   };
@@ -150,14 +151,14 @@ export default function TimeEntriesPage() {
   const isValidYearSemester = (year: number, semester: "S1" | "S2") => {
     // Vérifier si l'année est future
     if (year > currentYear) return true;
-    
+
     // Si c'est l'année en cours
     if (year === currentYear) {
       // Pour l'année en cours, autoriser seulement le semestre actuel et futur
       if (semester === "S1") return currentSemester === "S1";
       if (semester === "S2") return true; // S2 est toujours valide pour l'année en cours
     }
-    
+
     return false;
   };
 
@@ -166,7 +167,7 @@ export default function TimeEntriesPage() {
     if (year < currentYear) {
       return "Vous ne pouvez pas sélectionner une année antérieure à l'année en cours";
     }
-    
+
     if (year === currentYear && semester === "S1" && currentSemester === "S2") {
       return "Le premier semestre de l'année en cours n'est plus disponible";
     }
@@ -254,12 +255,10 @@ export default function TimeEntriesPage() {
   const fetchTimeEntries = async () => {
     try {
       const token = localStorage.getItem("token");
-      console.log("Fetching time entries...");
       const res = await fetch("/api/time-entries", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      console.log("Time entries received:", data);
 
       if (data.success) {
         setTimeEntries(data.data);
@@ -449,12 +448,13 @@ export default function TimeEntriesPage() {
     }
   }, [formData.userId, formData.semester, formData.year]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const validateHours = (hours: number) => {
     if (hours <= 0) {
       toast.error("Le nombre d'heures doit être supérieur à 0");
       return false;
     }
-    
+
     // Vérifier la limite par semestre
     if (hours > semesterHours.remaining) {
       toast.error(`Vous avez déjà ${semesterHours.total} heures pour ce semestre. Il vous reste ${semesterHours.remaining} heures disponibles.`);
@@ -471,6 +471,7 @@ export default function TimeEntriesPage() {
     return true;
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleHoursChange = (value: number) => {
     if (value <= 0) {
       toast.error("Le nombre d'heures doit être supérieur à 0");
@@ -495,13 +496,14 @@ export default function TimeEntriesPage() {
   };
 
   // Mise à jour de la validation du semestre
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleSemesterChange = (newSemester: "S1" | "S2") => {
     const error = getYearSemesterError(formData.year, newSemester);
     if (error) {
       toast.error(error);
       return;
     }
-    
+
     setFormData({
       ...formData,
       semester: newSemester,
@@ -510,6 +512,7 @@ export default function TimeEntriesPage() {
   };
 
   // Mise à jour de la validation de l'année
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleYearChange = (newYear: number) => {
     if (newYear < currentYear) {
       toast.error("Vous ne pouvez pas sélectionner une année antérieure à l'année en cours");
@@ -525,8 +528,8 @@ export default function TimeEntriesPage() {
     setFormData({
       ...formData,
       year: newYear,
-      semester: isValidYearSemester(newYear, formData.semester) 
-        ? formData.semester 
+      semester: isValidYearSemester(newYear, formData.semester)
+        ? formData.semester
         : (newYear === currentYear ? currentSemester : "S1") as "S1" | "S2",
     });
   };
@@ -543,6 +546,32 @@ export default function TimeEntriesPage() {
         throw new Error("Token non trouvé");
       }
 
+      // Récupérer les projets pour l'utilisateur de l'entrée
+      await fetchSecondaryProjects(timeEntry.userId);
+
+      // Trouver l'activité parente et configurer les activités enfants
+      const selectedActivity = activities.find(act =>
+        act.id === timeEntry.activityId ||
+        (act.children && act.children.some(child => child.id === timeEntry.activityId))
+      );
+
+      if (selectedActivity) {
+        if (selectedActivity.id === timeEntry.activityId) {
+          // L'activité sélectionnée est une activité parente
+          setParentActivity(selectedActivity.id);
+          setChildActivities(selectedActivity.children || []);
+        } else {
+          // L'activité sélectionnée est une activité enfant
+          const parentActivity = activities.find(act =>
+            act.children && act.children.some(child => child.id === timeEntry.activityId)
+          );
+          if (parentActivity) {
+            setParentActivity(parentActivity.id);
+            setChildActivities(parentActivity.children || []);
+          }
+        }
+      }
+
       setSelectedTimeEntry(timeEntry as TimeEntryWithDetails);
       setFormData({
         id: timeEntry.id,
@@ -555,7 +584,7 @@ export default function TimeEntriesPage() {
         comment: timeEntry.comment
       });
       setEditMode(true);
-      setIsViewModalOpen(true);
+      setIsCreateModalOpen(true); // Ouvrir le modal de création/édition
 
     } catch (error) {
       console.error("Erreur lors de la modification:", error);
@@ -571,13 +600,12 @@ export default function TimeEntriesPage() {
     if (!deleteTimeEntryId) return;
 
     const token = localStorage.getItem("token");
-    const res = await fetch("/api/time-entries", {
+    const res = await fetch(`/api/time-entries?id=${deleteTimeEntryId}`, {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ id: deleteTimeEntryId }),
     });
     const data = await res.json();
 
@@ -590,6 +618,7 @@ export default function TimeEntriesPage() {
     setDeleteTimeEntryId(null);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const fetchUserProjects = async (userId: number) => {
     try {
       const token = localStorage.getItem("token");
@@ -628,6 +657,7 @@ export default function TimeEntriesPage() {
     }));
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const openCreateModal = async () => {
     const token = localStorage.getItem("token");
     try {
@@ -658,13 +688,14 @@ export default function TimeEntriesPage() {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const filterProjects = (query: string) => {
     if (!Array.isArray(projects)) {
       setFilteredProjects([]);
       return;
     }
-    
-    const filtered = projects.filter(project => 
+
+    const filtered = projects.filter(project =>
       project.name.toLowerCase().includes(query.toLowerCase()) ||
       project.projectNumber.toLowerCase().includes(query.toLowerCase())
     );
@@ -816,81 +847,11 @@ export default function TimeEntriesPage() {
         <Toaster richColors closeButton position="top-right" />
         <Navbar />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* En-tête avec statistiques */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Total des entrées</p>
-                  <p className="text-2xl font-bold text-gray-900">{timeEntries.length}</p>
-                </div>
-                <div className="p-3 bg-blue-50 rounded-xl">
-                  <ClockIcon className="w-6 h-6 text-blue-600" />
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Total des heures</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {totalHoursUsed} / {MAX_TOTAL_HOURS} h
-                  </p>
-                </div>
-                <div className="p-3 bg-green-50 rounded-xl">
-                  <ClockIcon className="w-6 h-6 text-green-600" />
-                </div>
-              </div>
-            </div>
 
-            <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Restant disponible</p>
-                  <p className="text-2xl font-bold text-gray-900">{remainingHours} h</p>
-                </div>
-                <div className="p-3 bg-indigo-50 rounded-xl">
-                  <ClockIcon className="w-6 h-6 text-indigo-600" />
-                </div>
-              </div>
-            </div>
-
-            {/* <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Heures restantes globales</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {getRemainingHours()} h
-                  </p>
-                </div>
-                <div className="p-3 bg-orange-50 rounded-xl">
-                  <ClockIcon className="w-6 h-6 text-orange-600" />
-                </div>
-              </div>
-            </div> */}
-
-            {/* <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">Heures du semestre</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {semesterHours.total} / 480 h
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Restant: {semesterHours.remaining} h
-                  </p>
-                </div>
-                <div className="p-3 bg-blue-50 rounded-xl">
-                  <ClockIcon className="w-6 h-6 text-blue-600" />
-                </div>
-              </div>
-            </div> */}
-          </div>
 
           {/* Header principal */}
           <div className="relative overflow-hidden bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 p-6 mb-8">
-            <div className="relative z-10 flex items-center justify-between">
+            <div className="relative z-10 flex items-center justify-center">
               <div className="flex items-center space-x-3">
                 <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
                   <ClockIcon className="w-6 h-6 text-white" />
@@ -899,15 +860,6 @@ export default function TimeEntriesPage() {
                   Gestion des Entrées de Temps
                 </h1>
               </div>
-              <button
-                onClick={openCreateModal}
-                className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl
-                         hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg
-                         transform hover:-translate-y-0.5"
-              >
-                <PlusIcon className="w-5 h-5 mr-2" />
-                Nouvelle Entrée
-              </button>
             </div>
           </div>
 
@@ -1017,13 +969,13 @@ export default function TimeEntriesPage() {
                   >
                     Précédent
                   </button>
-                  
+
                   {[...Array(totalPages)].map((_, index) => {
                     const pageNumber = index + 1;
                     const isCurrentPage = currentPage === pageNumber;
                     const isNearCurrent = Math.abs(currentPage - pageNumber) <= 1;
                     const isFirstOrLast = pageNumber === 1 || pageNumber === totalPages;
-                    
+
                     if (isNearCurrent || isFirstOrLast) {
                       return (
                         <button
@@ -1062,7 +1014,7 @@ export default function TimeEntriesPage() {
         </div>
 
         {/* Modals */}
-        <CreateTimeEntryModal 
+        <CreateTimeEntryModal
           isOpen={isCreateModalOpen}
           onClose={() => {
             setIsCreateModalOpen(false);
@@ -1080,7 +1032,7 @@ export default function TimeEntriesPage() {
           childActivities={childActivities}
           onParentActivityChange={handleParentActivityChange}
         />
-        
+
         <ViewTimeEntryModal
           isOpen={isViewModalOpen}
           onClose={() => setIsViewModalOpen(false)}

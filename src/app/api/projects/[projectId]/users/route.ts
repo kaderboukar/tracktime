@@ -19,7 +19,8 @@ async function validateAssignment(
   tx: Prisma.TransactionClient,
   userId: number,
   projectId: string | number,
-  allocationPercentage: number
+  allocationPercentage: number,
+  isUpdate: boolean = false
 ): Promise<AssignmentValidationResult> {
   const projectIdNumber = typeof projectId === "string" ? parseInt(projectId, 10) : projectId;
 
@@ -57,23 +58,31 @@ async function validateAssignment(
     };
   }
 
-  const existingAssignment = await tx.userProject.findUnique({
-    where: {
-      userId_projectId: { userId, projectId: projectIdNumber }
-    }
-  });
+  // Vérifier si l'utilisateur a déjà une assignation pour ce projet
+  // Seulement pour les nouvelles assignations (pas pour les mises à jour)
+  if (!isUpdate) {
+    const existingAssignment = await tx.userProject.findUnique({
+      where: {
+        userId_projectId: { userId, projectId: projectIdNumber }
+      }
+    });
 
-  if (existingAssignment) {
-    return {
-      isValid: false,
-      message: "L'utilisateur a déjà une assignation pour ce projet",
-      currentTotal: 0,
-      existingAssignment
-    };
+    if (existingAssignment) {
+      return {
+        isValid: false,
+        message: "L'utilisateur a déjà une assignation pour ce projet",
+        currentTotal: 0,
+        existingAssignment
+      };
+    }
   }
 
   const currentAssignments = await tx.userProject.findMany({
-    where: { userId },
+    where: {
+      userId,
+      // Si c'est une mise à jour, exclure l'assignation actuelle du calcul
+      ...(isUpdate ? { NOT: { projectId: projectIdNumber } } : {})
+    },
     select: { allocationPercentage: true }
   });
 
@@ -100,7 +109,7 @@ async function validateAssignment(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const authResult = await authenticate(request);
@@ -108,7 +117,7 @@ export async function POST(
       return authResult;
     }
 
-    const { projectId } = params;
+    const { projectId } = await params;
     const projectIdNumber = parseInt(projectId, 10);
 
     if (isNaN(projectIdNumber)) {
@@ -204,14 +213,14 @@ export async function POST(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const authResult = await authenticate(request);
     if (authResult instanceof NextResponse) return authResult;
 
     const { role } = authResult;
-    if (role !== "PMSU" && role !== "MANAGEMENT") {
+    if (role !== "ADMIN" && role !== "PMSU" && role !== "MANAGEMENT") {
       return NextResponse.json(
         {
           success: false,
@@ -221,7 +230,8 @@ export async function PATCH(
       );
     }
 
-    const projectId = parseInt(params.projectId, 10);
+    const { projectId: projectIdString } = await params;
+    const projectId = parseInt(projectIdString, 10);
     if (isNaN(projectId)) {
       return NextResponse.json(
         { success: false, message: "ID projet invalide" },
@@ -259,7 +269,8 @@ export async function PATCH(
         tx,
         userId,
         projectId,
-        allocationPercentage
+        allocationPercentage,
+        true // isUpdate = true pour les modifications
       );
 
       if (!validationResult.isValid) {
@@ -308,14 +319,14 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
     const authResult = await authenticate(request);
     if (authResult instanceof NextResponse) return authResult;
 
     const { role } = authResult;
-    if (role !== "PMSU" && role !== "MANAGEMENT") {
+    if (role !== "ADMIN" && role !== "PMSU" && role !== "MANAGEMENT") {
       return NextResponse.json(
         {
           success: false,
@@ -325,7 +336,8 @@ export async function DELETE(
       );
     }
 
-    const projectId = parseInt(params.projectId, 10);
+    const { projectId: projectIdString } = await params;
+    const projectId = parseInt(projectIdString, 10);
     if (isNaN(projectId)) {
       return NextResponse.json(
         { success: false, message: "ID projet invalide" },

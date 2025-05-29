@@ -29,7 +29,15 @@ export async function GET(req: NextRequest) {
         role: true,
         indice: true,
         grade: true,
-        proformaCosts: true,
+        proformaCosts: {
+          where: {
+            year: new Date().getFullYear()
+          },
+          select: {
+            cost: true,
+            year: true
+          }
+        },
       },
     });
 
@@ -40,9 +48,17 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Ajouter le coût proforma de l'année courante directement dans l'objet user
+    const currentYearCost = user.proformaCosts.find(cost => cost.year === new Date().getFullYear());
+    const userWithProformaCost = {
+      ...user,
+      proformaCost: currentYearCost?.cost || null,
+      proformaCosts: user.proformaCosts // Garder aussi la liste complète
+    };
+
     return NextResponse.json({
       success: true,
-      data: user,
+      data: userWithProformaCost,
     });
   } catch (error) {
     console.error("Erreur dans /api/auth/me:", error);

@@ -8,7 +8,7 @@ import { z } from "zod";
 const prisma = new PrismaClient();
 
 export async function GET(req: NextRequest) {
-  const authResult = authenticate(req);
+  const authResult = await authenticate(req);
   if (authResult instanceof NextResponse) return authResult;
 
   try {
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authResult = authenticate(req);
+  const authResult = await authenticate(req);
   if (authResult instanceof NextResponse) return authResult;
 
   const body = await req.json();
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const authResult = authenticate(req);
+  const authResult = await authenticate(req);
   if (authResult instanceof NextResponse) return authResult;
 
   const body = await req.json();
@@ -133,7 +133,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const authResult = authenticate(req);
+  const authResult = await authenticate(req);
   if (authResult instanceof NextResponse) return authResult;
 
   const { id } = await req.json();

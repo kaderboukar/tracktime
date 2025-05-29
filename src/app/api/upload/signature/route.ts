@@ -11,14 +11,14 @@ export async function POST(req: NextRequest) {
       return authResult;
     }
 
-    const { userId, role } = authResult;
+    const { role } = authResult;
 
     // Vérifier si l'utilisateur a les droits nécessaires
     if (role !== 'ADMIN' && role !== 'PMSU') {
       return NextResponse.json(
-        { 
-          success: false, 
-          message: "Accès non autorisé. Vous devez être administrateur ou PMSU pour télécharger des signatures." 
+        {
+          success: false,
+          message: "Accès non autorisé. Vous devez être administrateur ou PMSU pour télécharger des signatures."
         },
         { status: 403 }
       );
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get('signature') as File;
-    
+
     if (!file) {
       return NextResponse.json(
         { success: false, message: 'Aucun fichier fourni' },
@@ -52,10 +52,10 @@ export async function POST(req: NextRequest) {
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    
+
     // Définir le chemin du dossier signatures
     const uploadsDir = path.join(process.cwd(), 'public', 'signatures');
-    
+
     try {
       // Créer le dossier s'il n'existe pas
       await mkdir(uploadsDir, { recursive: true });
@@ -66,14 +66,14 @@ export async function POST(req: NextRequest) {
     // Générer un nom de fichier unique avec l'extension originale
     const uniqueFilename = `${uuidv4()}${path.extname(file.name)}`;
     const filePath = path.join(uploadsDir, uniqueFilename);
-    
+
     try {
       await writeFile(filePath, buffer);
     } catch (error) {
       console.error('Erreur écriture fichier:', error);
       throw new Error('Erreur lors de l\'enregistrement du fichier');
     }
-    
+
     // Retourner l'URL relative
     const signatureUrl = `/signatures/${uniqueFilename}`;
 

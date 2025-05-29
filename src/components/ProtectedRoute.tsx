@@ -18,7 +18,6 @@ export default function ProtectedRoute({
     const resetTimeout = () => {
       clearTimeout(timeout);
       timeout = setTimeout(() => {
-        console.log("Session inactive, déconnexion");
         localStorage.removeItem("token");
         router.push("/login");
       }, 3600000); // 1 heure
@@ -37,7 +36,6 @@ export default function ProtectedRoute({
           const decoded = JSON.parse(atob(token.split(".")[1]));
           const exp = decoded.exp * 1000;
           if (Date.now() >= exp) {
-            console.log("Token expiré, redirection vers /login");
             localStorage.removeItem("token");
             router.push("/login");
             return;
@@ -57,7 +55,6 @@ export default function ProtectedRoute({
         });
 
         if (!response.ok) {
-          console.log("Token invalide, redirection vers /login");
           localStorage.removeItem("token");
           router.push("/login");
           return;

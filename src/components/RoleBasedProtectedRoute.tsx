@@ -21,7 +21,6 @@ export default function RoleBasedProtectedRoute({
       try {
         const token = localStorage.getItem("token");
         if (!token) {
-          console.log("Token non trouvé, redirection vers /login");
           router.push("/login");
           return;
         }
@@ -31,7 +30,6 @@ export default function RoleBasedProtectedRoute({
           const decoded = JSON.parse(atob(token.split(".")[1]));
           const exp = decoded.exp * 1000; // Convertir en millisecondes
           if (Date.now() >= exp) {
-            console.log("Token expiré, redirection vers /login");
             localStorage.removeItem("token");
             router.push("/login");
             return;
@@ -52,7 +50,6 @@ export default function RoleBasedProtectedRoute({
         const data = await response.json();
 
         if (!response.ok || !data.success) {
-          console.log("Erreur de vérification du token, redirection vers /login");
           localStorage.removeItem("token");
           router.push("/login");
           return;

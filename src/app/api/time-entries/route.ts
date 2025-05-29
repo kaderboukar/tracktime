@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authenticate } from "@/lib/auth";
+import { sendTimeEntryNotification } from "@/lib/email";
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,12 +10,16 @@ export async function GET(request: NextRequest) {
       return authResult;
     }
 
-    const { userId } = authResult;
+    const { userId, role } = authResult;
+
+    // Si l'utilisateur est ADMIN ou PMSU, récupérer toutes les entrées
+    // Sinon, récupérer seulement ses propres entrées APPROUVÉES
+    const whereClause = (role === "ADMIN" || role === "PMSU")
+      ? {}
+      : { userId, status: "APPROVED" as const };
 
     const timeEntries = await prisma.timeEntry.findMany({
-      where: {
-        userId
-      },
+      where: whereClause,
       include: {
         user: {
           select: {
@@ -41,6 +46,11 @@ export async function GET(request: NextRequest) {
           },
         },
       },
+      orderBy: [
+        { year: 'desc' },
+        { semester: 'desc' },
+        { createdAt: 'desc' }
+      ]
     });
 
     // Transformer les données pour inclure le coût proforma de l'année spécifique
@@ -73,13 +83,24 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function checkSemesterHours(userId: number, semester: "S1" | "S2", year: number, hoursToAdd: number = 0) {
+async function checkSemesterHours(userId: number, semester: "S1" | "S2", year: number, hoursToAdd: number = 0, userRole?: string) {
+  // Pour les utilisateurs STAFF, ne compter que les entrées APPROVED
+  // Pour ADMIN/PMSU, compter toutes les entrées
+  const whereClause = (userRole === "ADMIN" || userRole === "PMSU")
+    ? {
+        userId,
+        semester: semester as "S1" | "S2",
+        year
+      }
+    : {
+        userId,
+        semester: semester as "S1" | "S2",
+        year,
+        status: "APPROVED" as const
+      };
+
   const existingEntries = await prisma.timeEntry.findMany({
-    where: {
-      userId,
-      semester: semester as "S1" | "S2",
-      year
-    },
+    where: whereClause,
     select: {
       hours: true
     }
@@ -99,9 +120,9 @@ export async function POST(request: NextRequest) {
       return authResult;
     }
 
-    const { userId: authenticatedUserId } = authResult;
+    const { userId: authenticatedUserId, role } = authResult;
     const data = await request.json();
-    
+
     if (!data.userId || data.userId !== authenticatedUserId) {
       return NextResponse.json(
         { success: false, message: "Vous ne pouvez créer des entrées que pour vous-même" },
@@ -114,14 +135,15 @@ export async function POST(request: NextRequest) {
       data.userId,
       data.semester,
       data.year,
-      data.hours
+      data.hours,
+      role
     );
 
     if (totalHours > 480) {
       return NextResponse.json(
-        { 
-          success: false, 
-          message: `Vous avez déjà ${totalHours - data.hours} heures pour ce semestre. Il vous reste ${remainingHours} heures disponibles.` 
+        {
+          success: false,
+          message: `Vous avez déjà ${totalHours - data.hours} heures pour ce semestre. Il vous reste ${remainingHours} heures disponibles.`
         },
         { status: 400 }
       );
@@ -141,6 +163,7 @@ export async function POST(request: NextRequest) {
         user: {
           select: {
             name: true,
+            email: true,
             indice: true,
           },
         },
@@ -157,6 +180,24 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // Envoyer la notification email pour la nouvelle entrée de temps
+    try {
+      await sendTimeEntryNotification({
+        userName: timeEntry.user.name,
+        userEmail: timeEntry.user.email,
+        projectName: timeEntry.project.name,
+        activityName: timeEntry.activity.name,
+        hours: timeEntry.hours,
+        date: new Date().toLocaleDateString('fr-FR'),
+        semester: timeEntry.semester,
+        year: timeEntry.year,
+        description: timeEntry.comment || undefined
+      });
+    } catch (emailError) {
+      console.error("Erreur lors de l'envoi de la notification d'entrée de temps:", emailError);
+      // Ne pas faire échouer la création de l'entrée si l'email échoue
+    }
 
     return NextResponse.json({
       success: true,
@@ -207,8 +248,8 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Vérifier que l'utilisateur modifie sa propre entrée ou est admin
-    if (existingEntry.userId !== authenticatedUserId && role !== "ADMIN") {
+    // Vérifier que l'utilisateur modifie sa propre entrée ou est admin/PMSU
+    if (existingEntry.userId !== authenticatedUserId && role !== "ADMIN" && role !== "PMSU") {
       return NextResponse.json(
         { success: false, message: "Vous ne pouvez modifier que vos propres entrées" },
         { status: 403 }
@@ -288,8 +329,8 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Vérifier que l'utilisateur supprime sa propre entrée ou est admin
-    if (existingEntry.userId !== authenticatedUserId && role !== "ADMIN") {
+    // Vérifier que l'utilisateur supprime sa propre entrée ou est admin/PMSU
+    if (existingEntry.userId !== authenticatedUserId && role !== "ADMIN" && role !== "PMSU") {
       return NextResponse.json(
         { success: false, message: "Vous ne pouvez supprimer que vos propres entrées" },
         { status: 403 }

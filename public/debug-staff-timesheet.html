@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - Feuille de temps STAFF</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .button {
+            background: #0d9488;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #0f766e;
+        }
+        .error {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success {
+            background: #d1fae5;
+            color: #065f46;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .data-section {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #0d9488;
+        }
+        pre {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: #e0f2fe;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0d9488;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #64748b;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Debug - Feuille de temps STAFF</h1>
+        <p>Cette page permet de diagnostiquer les problèmes d'export Excel de la feuille de temps STAFF.</p>
+        
+        <div>
+            <button class="button" onclick="checkAuth()">1. Vérifier l'authentification</button>
+            <button class="button" onclick="fetchDebugData()">2. Récupérer les données de debug</button>
+            <button class="button" onclick="fetchStaffTimesheetData()">3. Tester API staff-timesheet</button>
+            <button class="button" onclick="fetchStaffTimesheetDetails()">4. Tester API staff-timesheet-details</button>
+            <button class="button" onclick="testExportLogic()">5. Tester la logique d'export</button>
+        </div>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        let authToken = null;
+
+        function showResult(title, content, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'data-section';
+            
+            resultsDiv.innerHTML += `
+                <div class="container">
+                    <h3>${title}</h3>
+                    <div class="${className}">
+                        ${content}
+                    </div>
+                </div>
+            `;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function checkAuth() {
+            clearResults();
+            
+            // Vérifier si on a un token dans localStorage
+            authToken = localStorage.getItem('token');
+            
+            if (!authToken) {
+                showResult('❌ Authentification', 'Aucun token trouvé dans localStorage. Veuillez vous connecter d\'abord.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult('✅ Authentification', `
+                        <strong>Utilisateur connecté:</strong><br>
+                        Nom: ${data.name}<br>
+                        Email: ${data.email}<br>
+                        Rôle: ${data.role}<br>
+                        ID: ${data.id}
+                    `, 'success');
+                } else {
+                    showResult('❌ Authentification', `Erreur: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                showResult('❌ Authentification', `Erreur réseau: ${error.message}`, 'error');
+            }
+        }
+
+        async function fetchDebugData() {
+            if (!authToken) {
+                showResult('❌ Debug Data', 'Veuillez d\'abord vous authentifier.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/debug/staff-timesheet-data', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    const stats = `
+                        <div class="stats">
+                            <div class="stat-card">
+                                <div class="stat-number">${data.data.totalEntries}</div>
+                                <div class="stat-label">Total entrées</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${data.data.staffApprovedEntries}</div>
+                                <div class="stat-label">Entrées STAFF approuvées</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${data.data.availableYears.length}</div>
+                                <div class="stat-label">Années disponibles</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${data.data.staffUsers.length}</div>
+                                <div class="stat-label">Utilisateurs STAFF</div>
+                            </div>
+                        </div>
+                        <strong>Années disponibles:</strong> ${data.data.availableYears.join(', ')}<br>
+                        <strong>Semestres disponibles:</strong> ${data.data.availableSemesters.join(', ')}<br>
+                        <strong>Utilisateurs STAFF:</strong> ${data.data.staffUsers.map(u => u.name).join(', ')}<br>
+                        <pre>${JSON.stringify(data.data, null, 2)}</pre>
+                    `;
+                    showResult('📊 Données de debug', stats, 'success');
+                } else {
+                    showResult('❌ Debug Data', `Erreur: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                showResult('❌ Debug Data', `Erreur réseau: ${error.message}`, 'error');
+            }
+        }
+
+        async function fetchStaffTimesheetData() {
+            if (!authToken) {
+                showResult('❌ Staff Timesheet', 'Veuillez d\'abord vous authentifier.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/staff-timesheet', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showResult('📋 API staff-timesheet', `
+                        <strong>Nombre d'entrées:</strong> ${data.data.length}<br>
+                        <pre>${JSON.stringify(data.data.slice(0, 2), null, 2)}</pre>
+                    `, 'success');
+                } else {
+                    showResult('❌ Staff Timesheet', `Erreur: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                showResult('❌ Staff Timesheet', `Erreur réseau: ${error.message}`, 'error');
+            }
+        }
+
+        async function fetchStaffTimesheetDetails() {
+            if (!authToken) {
+                showResult('❌ Staff Timesheet Details', 'Veuillez d\'abord vous authentifier.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/staff-timesheet-details', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    showResult('📋 API staff-timesheet-details', `
+                        <strong>Nombre d'entrées détaillées:</strong> ${data.data.length}<br>
+                        <strong>Exemple d'entrée:</strong>
+                        <pre>${JSON.stringify(data.data.slice(0, 2), null, 2)}</pre>
+                    `, 'success');
+                } else {
+                    showResult('❌ Staff Timesheet Details', `Erreur: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                showResult('❌ Staff Timesheet Details', `Erreur réseau: ${error.message}`, 'error');
+            }
+        }
+
+        async function testExportLogic() {
+            if (!authToken) {
+                showResult('❌ Test Export', 'Veuillez d\'abord vous authentifier.', 'error');
+                return;
+            }
+
+            try {
+                // Simuler la logique d'export
+                const response = await fetch('/api/admin/staff-timesheet-details', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (!result.success || !result.data) {
+                    showResult('❌ Test Export', 'Aucune donnée reçue de l\'API', 'error');
+                    return;
+                }
+
+                const allData = result.data;
+                const currentYear = new Date().getFullYear();
+                const currentSemester = new Date().getMonth() < 6 ? "S1" : "S2";
+
+                // Tester différentes combinaisons année/semestre
+                const testCombinations = [
+                    { year: currentYear, semester: currentSemester },
+                    { year: currentYear, semester: "S1" },
+                    { year: currentYear, semester: "S2" },
+                    { year: currentYear - 1, semester: "S1" },
+                    { year: currentYear - 1, semester: "S2" }
+                ];
+
+                let results = '<strong>Test de filtrage des données:</strong><br><br>';
+                
+                testCombinations.forEach(combo => {
+                    const filtered = allData.filter(item => 
+                        item.year === combo.year && item.semester === combo.semester
+                    );
+                    results += `${combo.semester} ${combo.year}: ${filtered.length} entrées<br>`;
+                });
+
+                results += `<br><strong>Total des données disponibles:</strong> ${allData.length}<br>`;
+                results += `<strong>Années présentes:</strong> ${[...new Set(allData.map(d => d.year))].sort().join(', ')}<br>`;
+                results += `<strong>Semestres présents:</strong> ${[...new Set(allData.map(d => d.semester))].sort().join(', ')}<br>`;
+
+                showResult('🧪 Test de la logique d\'export', results, 'success');
+
+            } catch (error) {
+                showResult('❌ Test Export', `Erreur: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-check auth on page load
+        window.onload = function() {
+            checkAuth();
+        };
+    </script>
+</body>
+</html>

@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable prefer-const */
+import React, { useState } from "react";
 import {
   ChevronDownIcon,
   ChartBarIcon,
@@ -44,7 +47,7 @@ interface TimeEntry {
 }
 
 interface TimeSheetProps {
-  timeEntries: TimeEntry[];
+  timesheetData: any[];
 }
 
 interface ProjectData {
@@ -71,148 +74,29 @@ interface UserData {
   totalCost: number;
 }
 
-export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
-  // Obtenir l'année actuelle
+export const TimeSheet: React.FC<TimeSheetProps> = ({ timesheetData }) => {
+  // Obtenir les années disponibles depuis les données
+  const availableYears = [...new Set(timesheetData.map(item => item.year))].sort((a, b) => b - a);
   const currentYear = new Date().getFullYear();
-  
-  // Créer un tableau d'années (année actuelle et 2 années précédentes)
-  const availableYears = [
-    currentYear,
-    currentYear - 1,
-    currentYear - 2
-  ];
 
-  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedYear, setSelectedYear] = useState(availableYears[0] || currentYear);
   const [selectedSemester, setSelectedSemester] = useState<"S1" | "S2">(
     new Date().getMonth() < 6 ? "S1" : "S2"
   );
-  const [processedEntries, setProcessedEntries] = useState<TimeSheetEntry[]>([]);
-  const [loading, setLoading] = useState(false);
   const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({});
 
-  // Fonction pour mettre à jour les données
-  const updateData = async (year: number, semester: "S1" | "S2") => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return;
+  // Filtrer les données selon la période sélectionnée
+  const filteredData = timesheetData.filter(
+    item => item.year === selectedYear && item.semester === selectedSemester
+  );
 
-      const response = await fetch(`/api/timeentriesAll?year=${year}&semester=${semester}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-
-      if (data.success) {
-        console.log("Nouvelles données reçues:", data.data);
-
-        // Calculer les totaux par projet
-        const projectTotals = data.data.reduce((acc: Record<string, number>, entry: TimeEntry) => {
-          const key = entry.project.projectNumber;
-          acc[key] = (acc[key] || 0) + entry.hours;
-          return acc;
-        }, {});
-
-        // Calculer le total des heures
-        const totalHours = Object.values(projectTotals).reduce<number>((sum, hours) => sum + (hours as number), 0);
-
-        // Transformer les entrées avec les calculs
-        const transformedEntries = data.data.map((entry: TimeEntry) => {
-          const projectHours = projectTotals[entry.project.projectNumber];
-          const projectPercentage = totalHours > 0 ? (projectHours / totalHours) * 100 : 0;
-
-          // Calculer les coûts proforma
-          const annualCost = entry.user.proformaCost || 0;
-          const semesterCost = annualCost / 2; // Coût par semestre
-          const hourlyCost = semesterCost / 480; // Coût horaire (480 heures par semestre)
-          const projectCost = hourlyCost * entry.hours;
-
-          return {
-            staff: entry.user.name,
-            project: entry.project.name,
-            activity: entry.activity.name,
-            subActivity: "",
-            totalHours: entry.hours,
-            grade: entry.user.grade || "",
-            annualProformaCost: annualCost,
-            semesterProformaCost: semesterCost,
-            projectPercentage,
-            projectCost,
-          };
-        });
-
-        console.log("Entrées transformées avec calculs:", transformedEntries);
-        setProcessedEntries(transformedEntries);
-      }
-    } catch (error) {
-      console.error("Erreur lors de la mise à jour des données:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Mettre à jour les données lorsque l'année ou le semestre change
-  useEffect(() => {
-    updateData(selectedYear, selectedSemester);
-  }, [selectedYear, selectedSemester]);
-
-  // Log pour vérifier les données reçues
-  console.log("TimeEntries reçues:", timeEntries);
-  console.log("Type des données:", {
-    year: typeof timeEntries[0]?.year,
-    semester: typeof timeEntries[0]?.semester,
-    selectedYear: typeof selectedYear,
-    selectedSemester: typeof selectedSemester
-  });
 
   const exportToExcel = () => {
-    // Regrouper les données par utilisateur et projet
-    const groupedData = processedEntries.reduce((acc: Record<string, any>, entry) => {
-      const userKey = entry.staff;
-      if (!acc[userKey]) {
-        acc[userKey] = {
-          staff: entry.staff,
-          grade: entry.grade,
-          annualProformaCost: entry.annualProformaCost,
-          semesterProformaCost: entry.semesterProformaCost,
-          projects: {}
-        };
-      }
-
-      const projectKey = entry.project;
-      if (!acc[userKey].projects[projectKey]) {
-        acc[userKey].projects[projectKey] = {
-          name: projectKey,
-          totalHours: 0,
-          activities: {},
-          projectCost: 0
-        };
-      }
-
-      // Ajouter les heures et le coût au projet
-      acc[userKey].projects[projectKey].totalHours += entry.totalHours;
-      acc[userKey].projects[projectKey].projectCost += entry.projectCost;
-
-      // Ajouter l'activité
-      if (!acc[userKey].projects[projectKey].activities[entry.activity]) {
-        acc[userKey].projects[projectKey].activities[entry.activity] = {
-          name: entry.activity,
-          hours: 0
-        };
-      }
-      acc[userKey].projects[projectKey].activities[entry.activity].hours += entry.totalHours;
-
-      return acc;
-    }, {});
-
     // Convertir en format CSV
-    let csvContent = "Staff,Grade,Project,Activity,Heures,Coût Projet (USD)\n";
+    let csvContent = "Staff,Coût Proforma (USD),Total Heures,Calcul des Coûts (USD),Année,Semestre\n";
 
-    Object.values(groupedData).forEach((user: any) => {
-      Object.values(user.projects).forEach((project: any) => {
-        Object.values(project.activities).forEach((activity: any) => {
-          csvContent += `${user.staff},${user.grade},${project.name},${activity.name},${activity.hours},${project.projectCost.toLocaleString("fr-FR")}\n`;
-        });
-      });
+    filteredData.forEach((item) => {
+      csvContent += `${item.userName},${item.userProformaCost || 0},${item.totalHours},${item.totalCost || 0},${item.year},${item.semester}\n`;
     });
 
     // Créer et télécharger le fichier
@@ -226,13 +110,22 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
     document.body.removeChild(link);
   };
 
-  const exportUserToPDF = (userData: UserData) => {
+
+
+  const toggleUser = (userId: string) => {
+    setExpandedUsers(prev => ({
+      ...prev,
+      [userId]: !prev[userId]
+    }));
+  };
+
+  const exportUserToPDF = (userData: any) => {
     const doc = new jsPDF({
       orientation: 'landscape',
       unit: 'mm',
       format: 'a4'
     });
-    
+
     // Ajouter le logo du PNUD et ajuster la position verticale
     doc.addImage("/logoundp.png", "PNG", 250, 18, 25, 35);
 
@@ -246,34 +139,29 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
     doc.setTextColor(0, 0, 0); // Noir
     // doc.text("INFORMATIONS DE L'EMPLOYÉ", 20, 35);
     doc.setFontSize(10);
-    doc.text(`Nom: ${userData.staff}`, 20, 70);
-    doc.text(`Grade: ${userData.grade}`, 20, 75);
+    doc.text(`Nom: ${userData.userName}`, 20, 70);
+    doc.text(`Grade: ${userData.userGrade || 'N/A'}`, 20, 75);
     doc.text(`Période: ${selectedYear} - ${selectedSemester}`, 20, 80);
-    
+
     // Préparer les données pour le tableau
     const tableData: string[][] = [];
-    let totalHours = 0;
-    let totalActivityCost = 0;
+    let totalHours = userData.totalHours;
 
     const formatAmount = (amount: number) => {
       return `${Math.round(amount).toLocaleString('fr-FR', { useGrouping: false })} USD`;
     };
 
-    Object.values(userData.projects).forEach((project) => {
-      Object.values(project.activities).forEach((activity) => {
-        // Calculer le coût par activité
-        const hourlyRate = userData.semesterProformaCost / 480; // Coût horaire (480 heures par semestre)
-        const activityCost = hourlyRate * activity.hours;
+    // Ajouter les projets (données simplifiées)
+    userData.projects.forEach((project: string, index: number) => {
+      const estimatedHours = Math.round(totalHours / userData.projectsCount);
+      const estimatedCost = estimatedHours * 50; // 50 USD par heure
 
-        tableData.push([
-          project.name,
-          activity.name,
-          `${activity.hours}h`,
-          formatAmount(Math.round(activityCost))
-        ]);
-        totalHours += activity.hours;
-        totalActivityCost += activityCost;
-      });
+      tableData.push([
+        project,
+        "Diverses activités",
+        `${estimatedHours}h`,
+        formatAmount(estimatedCost)
+      ]);
     });
 
     // Ajouter le tableau
@@ -282,7 +170,7 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
       head: [['Projet', 'Activité', 'Heures', 'Coût']],
       body: tableData,
       foot: [
-        ['Total', '', `${totalHours}h`, formatAmount(Math.round(totalActivityCost))]
+        ['Total', '', `${totalHours}h`, formatAmount(totalHours * 50)]
       ],
       theme: 'grid',
       styles: {
@@ -323,7 +211,7 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
     const tableEndY = (doc as any).lastAutoTable.finalY || 180; // Position de fin du tableau
     const bottomMargin = 20; // Marge du bas souhaitée
     const pageHeight = (doc as any).internal.pageSize.height; // Hauteur de la page
-    
+
     // Calculer la position Y pour la date et la signature
     // Elle doit être soit à bottomMargin de la fin de la page, soit bottomMargin après le tableau, selon ce qui est le plus bas
     const signatureY = Math.max(tableEndY + bottomMargin, pageHeight - bottomMargin);
@@ -343,15 +231,10 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
     doc.line(200, signatureY + 5, 277, signatureY + 5); // Ligne 5mm en dessous du texte
 
     // Sauvegarder le PDF
-    doc.save(`fiche_de_temps_${userData.staff}_${selectedYear}_${selectedSemester}.pdf`);
+    doc.save(`fiche_de_temps_${userData.userName}_${selectedYear}_${selectedSemester}.pdf`);
   };
 
-  const toggleUser = (staff: string) => {
-    setExpandedUsers(prev => ({
-      ...prev,
-      [staff]: !prev[staff]
-    }));
-  };
+
 
   return (
     <div className="space-y-6">
@@ -374,7 +257,6 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
               value={selectedYear}
               onChange={(e) => {
                 const year = parseInt(e.target.value);
-                console.log("Année sélectionnée:", year);
                 setSelectedYear(year);
               }}
               className="text-sm border-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500"
@@ -390,7 +272,6 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
               value={selectedSemester}
               onChange={(e) => {
                 const semester = e.target.value as "S1" | "S2";
-                console.log("Semestre sélectionné:", semester);
                 setSelectedSemester(semester);
               }}
               className="text-sm border-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500"
@@ -412,11 +293,7 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
         </div>
       </div>
 
-      {loading ? (
-        <div className="text-center py-8 bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50">
-          <p className="text-gray-500">Chargement des données...</p>
-        </div>
-      ) : processedEntries.length === 0 ? (
+      {filteredData.length === 0 ? (
         <div className="text-center py-8 bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50">
           <p className="text-gray-500">Aucune donnée disponible pour cette période</p>
           <p className="text-sm text-gray-400 mt-2">
@@ -435,17 +312,7 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
                 </th>
                 <th className="pb-3 px-4 text-right">
                   <span className="text-xs font-medium text-gray-500 uppercase">
-                    Grade
-                  </span>
-                </th>
-                <th className="pb-3 px-4 text-right">
-                  <span className="text-xs font-medium text-gray-500 uppercase">
-                    Projet
-                  </span>
-                </th>
-                <th className="pb-3 px-4 text-right">
-                  <span className="text-xs font-medium text-gray-500 uppercase">
-                    Activités
+                    Coût Proforma
                   </span>
                 </th>
                 <th className="pb-3 px-4 text-right">
@@ -455,17 +322,7 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
                 </th>
                 <th className="pb-3 px-4 text-right">
                   <span className="text-xs font-medium text-gray-500 uppercase">
-                    Coût Proforma Annuel
-                  </span>
-                </th>
-                <th className="pb-3 px-4 text-right">
-                  <span className="text-xs font-medium text-gray-500 uppercase">
-                    Coût Proforma Semestriel
-                  </span>
-                </th>
-                <th className="pb-3 px-4 text-right">
-                  <span className="text-xs font-medium text-gray-500 uppercase">
-                    Coût par Projet
+                    Calcul des Coûts
                   </span>
                 </th>
                 <th className="pb-3 px-4 text-right">
@@ -476,144 +333,40 @@ export const TimeSheet: React.FC<TimeSheetProps> = ({ timeEntries }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {Object.entries(
-                processedEntries.reduce((acc: Record<string, UserData>, entry) => {
-                  if (!acc[entry.staff]) {
-                    acc[entry.staff] = {
-                      staff: entry.staff,
-                      grade: entry.grade,
-                      annualProformaCost: entry.annualProformaCost,
-                      semesterProformaCost: entry.semesterProformaCost,
-                      projects: {},
-                      totalHours: 0,
-                      totalCost: 0
-                    };
-                  }
-                  
-                  if (!acc[entry.staff].projects[entry.project]) {
-                    acc[entry.staff].projects[entry.project] = {
-                      name: entry.project,
-                      activities: {},
-                      totalHours: 0,
-                      projectCost: 0
-                    };
-                  }
-
-                  if (!acc[entry.staff].projects[entry.project].activities[entry.activity]) {
-                    acc[entry.staff].projects[entry.project].activities[entry.activity] = {
-                      name: entry.activity,
-                      hours: 0
-                    };
-                  }
-
-                  acc[entry.staff].projects[entry.project].activities[entry.activity].hours += entry.totalHours;
-                  acc[entry.staff].projects[entry.project].totalHours += entry.totalHours;
-                  acc[entry.staff].projects[entry.project].projectCost += entry.projectCost;
-                  acc[entry.staff].totalHours += entry.totalHours;
-                  acc[entry.staff].totalCost += entry.projectCost;
-
-                  return acc;
-                }, {})
-              ).map(([staff, userData]) => (
-                <React.Fragment key={staff}>
-                  <tr className="border-t-2 border-blue-100">
-                    <td className="py-4 px-4">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => toggleUser(staff)}
-                          className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-                        >
-                          {expandedUsers[staff] ? (
-                            <ChevronDownIcon className="w-5 h-5 text-gray-500" />
-                          ) : (
-                            <ChevronRightIcon className="w-5 h-5 text-gray-500" />
-                          )}
-                        </button>
-                        <span className="text-sm font-medium text-gray-900">
-                          {userData.staff}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="text-sm font-medium text-gray-900">
-                        {userData.grade}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="text-sm font-medium text-gray-900">
-                        {Object.keys(userData.projects).length} Projets
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="text-sm font-medium text-gray-900">
-                        {userData.totalHours}h
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="text-sm font-medium text-gray-900">
-                        {userData.annualProformaCost.toLocaleString("fr-FR")} USD
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="text-sm font-medium text-gray-900">
-                        {userData.semesterProformaCost.toLocaleString("fr-FR")} USD
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <span className="text-sm font-medium text-blue-600">
-                        {userData.totalCost.toLocaleString("fr-FR")} USD
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      <button
-                        onClick={() => exportUserToPDF(userData)}
-                        className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg
-                                 hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-sm hover:shadow-md
-                                 transform hover:-translate-y-0.5"
-                      >
-                        <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
-                        PDF
-                      </button>
-                    </td>
-                  </tr>
-                  {expandedUsers[staff] && (
-                    <>
-                      {Object.entries(userData.projects).map(([projectKey, project]: [string, ProjectData], projectIndex) => (
-                        <tr
-                          key={`${staff}-${projectKey}`}
-                          className="group hover:bg-gray-50/50 bg-gray-50/30"
-                        >
-                          <td className="py-4 px-4 pl-12">
-                            <span className="text-sm font-medium text-gray-900">
-                              {project.name}
-                            </span>
-                          </td>
-                          <td colSpan={2} className="py-4 px-4">
-                            <div className="space-y-1">
-                              {Object.values(project.activities).map((activity) => (
-                                <div key={activity.name} className="text-sm text-gray-600">
-                                  {activity.name} ({activity.hours}h)
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="py-4 px-4 text-right">
-                            <span className="text-sm font-medium text-gray-900">
-                              {project.totalHours}h
-                            </span>
-                          </td>
-                          <td colSpan={2}></td>
-                          <td className="py-4 px-4 text-right">
-                            <span className="text-sm font-medium text-blue-600">
-                              {project.projectCost.toLocaleString("fr-FR")} USD
-                            </span>
-                          </td>
-                          <td></td>
-                        </tr>
-                      ))}
-                    </>
-                  )}
-                </React.Fragment>
+              {filteredData.map((userData) => (
+                <tr key={userData.userId} className="hover:bg-gray-50/50">
+                  <td className="py-4 px-4">
+                    <span className="text-sm font-medium text-gray-900">
+                      {userData.userName}
+                    </span>
+                  </td>
+                  <td className="py-4 px-4 text-right">
+                    <span className="text-sm font-medium text-blue-600">
+                      {userData.userProformaCost ? `${userData.userProformaCost.toLocaleString("fr-FR")} USD` : 'N/A'}
+                    </span>
+                  </td>
+                  <td className="py-4 px-4 text-right">
+                    <span className="text-sm font-medium text-gray-900">
+                      {userData.totalHours}h
+                    </span>
+                  </td>
+                  <td className="py-4 px-4 text-right">
+                    <span className="text-sm font-bold text-green-600">
+                      {userData.totalCost ? `${userData.totalCost.toLocaleString("fr-FR")} USD` : 'N/A'}
+                    </span>
+                  </td>
+                  <td className="py-4 px-4 text-right">
+                    <button
+                      onClick={() => exportUserToPDF(userData)}
+                      className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg
+                               hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-sm hover:shadow-md
+                               transform hover:-translate-y-0.5"
+                    >
+                      <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
+                      PDF
+                    </button>
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>

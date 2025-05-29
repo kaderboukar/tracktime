@@ -9,7 +9,6 @@ type Props = {
 };
 
 export const AdminStats: React.FC<Props> = ({ stats }) => {
-  console.log('AdminStats rendu avec:', stats);
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
       <StatCard title="Utilisateurs" value={stats.totalUsers} icon="👥" />

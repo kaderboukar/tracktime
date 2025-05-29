@@ -4,9 +4,10 @@ import { staffAccess } from "@prisma/client";  // Garder uniquement le type
 import { authenticate } from "@/lib/auth";
 import { projectSchema } from "@/lib/validation";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
 
 export async function GET(req: NextRequest) {
-  const authResult = authenticate(req);
+  const authResult = await authenticate(req);
   if (authResult instanceof NextResponse) return authResult;
 
   try {
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authResult = authenticate(req);
+  const authResult = await authenticate(req);
   if (authResult instanceof NextResponse) return authResult;
 
   const body = await req.json();
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { name, projectNumber, staffAccess: staffAccessValue } = result.data;
+  const { name, projectNumber, projectType, staffAccess: staffAccessValue } = result.data;
 
   try {
     const existingProject = await prisma.project.findUnique({
@@ -50,10 +51,10 @@ export async function POST(req: NextRequest) {
     }
 
     const project = await prisma.project.create({
-      data: { 
+      data: {
         name,
         projectNumber,
-        projectType: "DEFAULT",  // Add default project type
+        projectType: projectType || "DEFAULT",  // Utiliser le projectType fourni ou défaut
         staffAccess: staffAccessValue as staffAccess  // Cast vers le type enum
       },
     });
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const authResult = authenticate(req);
+  const authResult = await authenticate(req);
   if (authResult instanceof NextResponse) return authResult;
 
   const body = await req.json();
@@ -134,7 +135,7 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const authResult = authenticate(req);
+  const authResult = await authenticate(req);
   if (authResult instanceof NextResponse) return authResult;
 
   const { id } = await req.json();

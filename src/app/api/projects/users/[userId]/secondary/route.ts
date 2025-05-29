@@ -23,11 +23,8 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    console.log("Type d'utilisateur:", user?.type);
-    console.log("Projets assignés:", user?.projects);
 
     const assignedProjectIds = user?.projects.map(p => p.projectId) || [];
-    console.log("IDs des projets assignés:", assignedProjectIds);
 
     // Requête modifiée avec plus de flexibilité
     const availableProjects = await prisma.project.findMany({
@@ -49,13 +46,6 @@ export async function GET(request: NextRequest) {
         staffAccess: true
       },
     });
-
-    // Ajouter des logs supplémentaires
-    console.log("Critères de recherche:", {
-      userType: user?.type,
-      excluded: assignedProjectIds
-    });
-    console.log("Requête complète:", availableProjects);
 
     return NextResponse.json({
       success: true,

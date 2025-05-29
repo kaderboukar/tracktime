@@ -12,11 +12,12 @@ export async function GET(
       return NextResponse.json({ error: 'Token manquant' }, { status: 401 });
     }
 
-    const token = authHeader.split(' ')[1];
-    const verifiedUserId = await authenticate(token);
-    if (!verifiedUserId) {
-      return NextResponse.json({ error: 'Token invalide' }, { status: 401 });
+    const authResult = await authenticate(request);
+    if (authResult instanceof NextResponse) {
+      return authResult;
     }
+
+    const verifiedUserId = authResult.userId;
 
     // Récupération des projets non assignés à l'utilisateur avec gestion d'erreur améliorée
     const projects = await prisma.project.findMany({

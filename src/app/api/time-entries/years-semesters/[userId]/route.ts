@@ -9,7 +9,7 @@ interface YearSemester {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
     const authResult = await authenticate(request);
@@ -18,7 +18,8 @@ export async function GET(
     }
 
     const { userId: authenticatedUserId, role } = authResult;
-    const requestedUserId = parseInt(params.userId);
+    const { userId } = await params;
+    const requestedUserId = parseInt(userId);
 
     // Vérifier que l'utilisateur demande ses propres données ou est admin
     if (requestedUserId !== authenticatedUserId && role !== "ADMIN") {

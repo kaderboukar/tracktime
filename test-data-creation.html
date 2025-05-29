@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Data Creation</title>
+</head>
+<body>
+    <h1>Test Data Creation</h1>
+    <button onclick="createTestData()">Créer les données de test</button>
+    <button onclick="checkStaffData()">Vérifier les données STAFF</button>
+    <div id="result"></div>
+
+    <script>
+        async function createTestData() {
+            try {
+                const response = await fetch('/api/debug/create-test-data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                document.getElementById('result').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                document.getElementById('result').innerHTML = 'Erreur: ' + error.message;
+            }
+        }
+
+        async function checkStaffData() {
+            try {
+                const response = await fetch('/api/debug/staff-data');
+                const data = await response.json();
+                document.getElementById('result').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                document.getElementById('result').innerHTML = 'Erreur: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

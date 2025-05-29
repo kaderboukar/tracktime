@@ -3,12 +3,20 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { BellIcon, UserCircleIcon } from "@heroicons/react/24/outline";
+import { BellIcon, UserCircleIcon, KeyIcon } from "@heroicons/react/24/outline";
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import ChangePasswordModal from "./ChangePasswordModal";
 
 export default function Navbar() {
   const router = useRouter();
   const [userRole, setUserRole] = useState<string>("");
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -134,6 +142,14 @@ export default function Navbar() {
                             group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-right"
               >
                 <button
+                  onClick={() => setIsChangePasswordModalOpen(true)}
+                  className="w-full px-4 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-gray-50 transition-colors
+                           flex items-center space-x-2"
+                >
+                  <KeyIcon className="h-4 w-4" />
+                  <span>Changer mot de passe</span>
+                </button>
+                <button
                   onClick={handleLogout}
                   className="w-full px-4 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-gray-50 transition-colors
                            flex items-center space-x-2"
@@ -158,6 +174,15 @@ export default function Navbar() {
           </div>
         </div>
       </div>
+
+      {/* Modal de changement de mot de passe rendu via portail */}
+      {isMounted && typeof window !== 'undefined' && createPortal(
+        <ChangePasswordModal
+          isOpen={isChangePasswordModalOpen}
+          onClose={() => setIsChangePasswordModalOpen(false)}
+        />,
+        document.body
+      )}
     </nav>
   );
 }

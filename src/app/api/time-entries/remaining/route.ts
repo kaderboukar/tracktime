@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
       return authResult;
     }
 
+    const { role } = authResult;
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
     const semester = searchParams.get("semester");
@@ -23,12 +24,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Pour les utilisateurs STAFF, ne compter que les entrées APPROVED
+    // Pour ADMIN/PMSU, compter toutes les entrées
+    const whereClause = (role === "ADMIN" || role === "PMSU")
+      ? {
+          userId: parseInt(userId),
+          semester: semester as "S1" | "S2",
+          year: parseInt(year)
+        }
+      : {
+          userId: parseInt(userId),
+          semester: semester as "S1" | "S2",
+          year: parseInt(year),
+          status: "APPROVED" as const
+        };
+
     const existingEntries = await prisma.timeEntry.findMany({
-      where: {
-        userId: parseInt(userId),
-        semester: semester as "S1" | "S2",
-        year: parseInt(year)
-      },
+      where: whereClause,
       select: {
         hours: true
       }

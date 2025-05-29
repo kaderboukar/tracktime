@@ -39,7 +39,7 @@ export function WorkedHours({ totalHours }: WorkedHoursProps) {
           <div>
             <p className="text-3xl font-bold text-gray-900">
               {totalHours.toFixed(1)}
-              <span className="text-lg text-gray-500 ml-1">/ {maxHours}h</span>
+              <span className="text-lg text-gray-500 ml-1"></span>
             </p>
             <p className="text-sm text-gray-500 mt-1">
               Heures totales ce semestre
@@ -72,7 +72,7 @@ export function WorkedHours({ totalHours }: WorkedHoursProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 pt-4">
+        {/* <div className="grid grid-cols-3 gap-4 pt-4">
           {[
             { 
               id: 'remaining',
@@ -95,7 +95,7 @@ export function WorkedHours({ totalHours }: WorkedHoursProps) {
               <p className="text-lg font-semibold text-gray-900 mt-1">{stat.value}</p>
             </div>
           ))}
-        </div>
+        </div> */}
       </div>
     </div>
   );
