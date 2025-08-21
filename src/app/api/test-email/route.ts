@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { restrictTo } from "@/lib/auth";
-import { testEmailConfiguration, sendWelcomeEmail, sendTimeEntryNotification } from "@/lib/email";
+import { testEmailConfiguration, sendWelcomeEmail, sendTimeEntryNotification, getApplicationUrl } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   // Seuls les admins peuvent tester la configuration email
@@ -103,12 +103,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       configValid: isConfigValid,
+      appUrl: getApplicationUrl(),
       config: {
         host: process.env.SMTP_HOST,
         port: process.env.SMTP_PORT,
         user: process.env.SMTP_USER,
         from: process.env.SMTP_FROM,
         notificationEmails: process.env.TIME_ENTRY_NOTIFICATION_EMAILS?.split(',').map(email => email.trim()) || []
+      },
+      environment: {
+        NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+        VERCEL_URL: process.env.VERCEL_URL,
+        NEXTAUTH_URL: process.env.NEXTAUTH_URL
       }
     });
 

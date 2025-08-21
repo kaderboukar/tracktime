@@ -16,6 +16,32 @@ const getFormattedSender = (): string => {
   return `"WORKLOAD STUDY SURVEY" <${process.env.SMTP_FROM}>`;
 };
 
+// Fonction utilitaire pour obtenir l'URL de l'application
+const getAppUrl = (): string => {
+  // Priorité 1: Variable d'environnement NEXT_PUBLIC_APP_URL
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  }
+  
+  // Priorité 2: Variable d'environnement VERCEL_URL (pour Vercel)
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  
+  // Priorité 3: Variable d'environnement NEXTAUTH_URL
+  if (process.env.NEXTAUTH_URL) {
+    return process.env.NEXTAUTH_URL;
+  }
+  
+  // Fallback: localhost pour le développement
+  return 'http://localhost:3000';
+};
+
+// Fonction exportée pour tester la détection de l'URL
+export const getApplicationUrl = (): string => {
+  return getAppUrl();
+};
+
 // Interface pour les données utilisateur
 interface UserData {
   name: string;
@@ -74,7 +100,7 @@ const getWelcomeEmailTemplate = (userData: UserData) => `
             <p>Pour des raisons de sécurité, nous vous recommandons de ne pas partager votre mot de passe.</p>
 
             <p style="text-align: center; margin: 30px 0;">
-                <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/login" class="button">
+                <a href="${getAppUrl()}/login" class="button">
                     Se connecter
                 </a>
             </p>
@@ -144,6 +170,12 @@ const getTimeEntryNotificationTemplate = (entryData: TimeEntryData) => `
             </div>
 
             <p>Vous pouvez consulter et gérer cette entrée dans le système de suivi du temps WORKLOAD STUDY SURVEY.</p>
+            
+            <p style="text-align: center; margin: 30px 0;">
+                <a href="${getAppUrl()}/" class="button">
+                    Accéder au Dashboard
+                </a>
+            </p>
         </div>
         <div class="footer">
             <p>Cet email a été envoyé automatiquement par WORKLOAD STUDY SURVEY. Merci de ne pas répondre à ce message.</p>

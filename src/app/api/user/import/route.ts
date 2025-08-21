@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { restrictTo } from "@/lib/auth";
 import bcrypt from "bcrypt";
 import * as z from "zod";
+import { sendWelcomeEmail } from "@/lib/email";
 
 const prisma = new PrismaClient();
 
@@ -102,6 +103,19 @@ export async function POST(req: NextRequest) {
 
           return newUser;
         });
+
+        // Envoyer l'email de bienvenue avec les informations de connexion
+        try {
+          await sendWelcomeEmail({
+            name: user.name,
+            email: user.email,
+            password: userData.password, // Mot de passe en clair pour l'email
+            role: user.role
+          });
+        } catch (emailError) {
+          console.error(`Erreur lors de l'envoi de l'email de bienvenue à ${user.email}:`, emailError);
+          // Ne pas faire échouer l'import si l'email échoue
+        }
 
         successfulImports.push(user);
       } catch (error) {
