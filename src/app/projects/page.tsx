@@ -623,7 +623,8 @@ export default function ProjectsPage() {
                             | "ALL"
                             | "OPERATION"
                             | "PROGRAMME"
-                            | "SUPPORT",
+                            | "SUPPORT"
+                            | "MANAGEMENT",
                         })
                       }
                       className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 transition-all duration-200 bg-white/50 backdrop-blur-sm"
