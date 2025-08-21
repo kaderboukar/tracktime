@@ -135,6 +135,7 @@ enum staffAccess {
   OPERATION
   PROGRAMME
   SUPPORT
+  MANAGEMENT
 }
 
 enum Semester {
