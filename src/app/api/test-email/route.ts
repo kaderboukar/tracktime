@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { restrictTo } from "@/lib/auth";
 import { testEmailConfiguration, sendWelcomeEmail, sendTimeEntryNotification, getApplicationUrl } from "@/lib/email";
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcrypt";
+
+const prisma = new PrismaClient();
 
 export async function POST(req: NextRequest) {
   // Seuls les admins peuvent tester la configuration email
@@ -25,6 +29,7 @@ export async function POST(req: NextRequest) {
 
     let result = false;
     let message = "";
+    let emailResults = [];
 
     switch (type) {
       case "welcome":
@@ -66,9 +71,151 @@ export async function POST(req: NextRequest) {
         message = result ? "Notification d'entrée de temps envoyée avec succès" : "Échec de l'envoi de la notification";
         break;
 
+      case "bulk-import":
+        // Test d'import de masse avec envoi d'emails
+        const testUsers = [
+          {
+            email: "test1@example.com",
+            password: "MotDePasse123",
+            name: "Utilisateur Test 1",
+            indice: "P1",
+            grade: "G1",
+            type: "OPERATION",
+            role: "STAFF",
+            proformaCosts: [{ year: 2024, cost: 50000 }]
+          },
+          {
+            email: "test2@example.com",
+            password: "MotDePasse456",
+            name: "Utilisateur Test 2",
+            indice: "P2",
+            grade: "G2",
+            type: "PROGRAMME",
+            role: "MANAGEMENT",
+            proformaCosts: [{ year: 2024, cost: 60000 }]
+          },
+          {
+            email: "test3@example.com",
+            password: "MotDePasse789",
+            name: "Utilisateur Test 3",
+            indice: "P3",
+            grade: "G3",
+            type: "SUPPORT",
+            role: "ADMIN",
+            proformaCosts: [{ year: 2024, cost: 70000 }]
+          }
+        ];
+
+        const importResults = [];
+        const emailResults = [];
+
+        for (const [index, userData] of testUsers.entries()) {
+          try {
+            // Vérifier si l'utilisateur existe déjà
+            const existingUser = await prisma.user.findUnique({
+              where: { email: userData.email }
+            });
+
+            if (existingUser) {
+              importResults.push({
+                row: index + 1,
+                email: userData.email,
+                status: "SKIPPED",
+                message: "Utilisateur déjà existant"
+              });
+              continue;
+            }
+
+            // Créer l'utilisateur
+            const hashedPassword = await bcrypt.hash(userData.password, 10);
+            const user = await prisma.$transaction(async (tx) => {
+              const newUser = await tx.user.create({
+                data: {
+                  email: userData.email,
+                  password: hashedPassword,
+                  name: userData.name,
+                  indice: userData.indice,
+                  grade: userData.grade,
+                  type: userData.type,
+                  role: userData.role,
+                  isActive: true,
+                  signature: "",
+                }
+              });
+
+              // Créer les coûts proforma
+              if (userData.proformaCosts && Array.isArray(userData.proformaCosts)) {
+                await tx.userProformaCost.createMany({
+                  data: userData.proformaCosts.map((cost: { year: number; cost: number }) => ({
+                    userId: newUser.id,
+                    year: cost.year,
+                    cost: cost.cost
+                  }))
+                });
+              }
+
+              return newUser;
+            });
+
+            // Envoyer l'email de bienvenue
+            try {
+              const emailResult = await sendWelcomeEmail({
+                name: user.name,
+                email: user.email,
+                password: userData.password,
+                role: user.role
+              });
+
+              emailResults.push({
+                email: user.email,
+                status: emailResult ? "SENT" : "FAILED",
+                message: emailResult ? "Email envoyé avec succès" : "Échec de l'envoi"
+              });
+            } catch (emailError) {
+              emailResults.push({
+                email: user.email,
+                status: "FAILED",
+                message: `Erreur email: ${(emailError as Error).message}`
+              });
+            }
+
+            importResults.push({
+              row: index + 1,
+              email: user.email,
+              status: "CREATED",
+              message: "Utilisateur créé avec succès"
+            });
+
+          } catch (error) {
+            importResults.push({
+              row: index + 1,
+              email: userData.email,
+              status: "ERROR",
+              message: `Erreur: ${(error as Error).message}`
+            });
+          }
+        }
+
+        const successfulImports = importResults.filter(r => r.status === "CREATED").length;
+        const successfulEmails = emailResults.filter(r => r.status === "SENT").length;
+
+        return NextResponse.json({
+          success: true,
+          message: `Test d'import de masse terminé: ${successfulImports} utilisateurs créés, ${successfulEmails} emails envoyés`,
+          importResults,
+          emailResults,
+          summary: {
+            total: testUsers.length,
+            created: successfulImports,
+            emailsSent: successfulEmails,
+            skipped: importResults.filter(r => r.status === "SKIPPED").length,
+            errors: importResults.filter(r => r.status === "ERROR").length
+          }
+        });
+
       default:
         return NextResponse.json(
-          { success: false, message: "Type de test invalide. Utilisez 'welcome' ou 'timeentry'" },
+          { success: false, message: "Type de test invalide. Utilisez 'welcome', 'timeentry' ou 'bulk-import'" },
           { status: 400 }
         );
     }

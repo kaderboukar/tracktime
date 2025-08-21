@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Import de Masse - WORKLOAD STUDY SURVEY</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0d9488;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            color: #333;
+            margin-top: 0;
+        }
+        button {
+            background-color: #0d9488;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background-color: #0f766e;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .success {
+            background-color: #d1fae5;
+            border: 1px solid #10b981;
+            color: #065f46;
+        }
+        .error {
+            background-color: #fee2e2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+        }
+        .info {
+            background-color: #dbeafe;
+            border: 1px solid #3b82f6;
+            color: #1e40af;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0d9488;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .summary-item {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .summary-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0d9488;
+        }
+        .summary-label {
+            font-size: 14px;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test Import de Masse - WORKLOAD STUDY SURVEY</h1>
+        
+        <div class="test-section">
+            <h3>📧 Test Configuration Email</h3>
+            <p>Vérifiez que la configuration SMTP est correcte avant de tester l'import de masse.</p>
+            <button onclick="testEmailConfig()">Tester Configuration SMTP</button>
+            <div id="configResult" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Test Import de Masse avec Emails</h3>
+            <p>Ce test va créer 3 utilisateurs de test et envoyer des emails de bienvenue à chacun.</p>
+            <div class="info">
+                <strong>⚠️ Attention :</strong> Ce test crée de vrais utilisateurs en base de données. 
+                Les utilisateurs de test utilisent des emails fictifs (test1@example.com, etc.).
+            </div>
+            <button onclick="testBulkImport()" id="bulkImportBtn">Lancer Test Import de Masse</button>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Test en cours...</p>
+            </div>
+            <div id="bulkImportResult" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📋 Résultats Détaillés</h3>
+            <div id="detailedResults" style="display: none;">
+                <h4>Résumé</h4>
+                <div class="summary" id="summaryGrid"></div>
+                
+                <h4>Détails Import</h4>
+                <div id="importDetails"></div>
+                
+                <h4>Détails Emails</h4>
+                <div id="emailDetails"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Fonction pour afficher les résultats
+        function showResult(elementId, content, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.textContent = content;
+            element.className = `result ${type}`;
+            element.style.display = 'block';
+        }
+
+        // Fonction pour masquer les résultats
+        function hideResult(elementId) {
+            document.getElementById(elementId).style.display = 'none';
+        }
+
+        // Fonction pour afficher/masquer le loading
+        function toggleLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            document.getElementById('bulkImportBtn').disabled = show;
+        }
+
+        // Test de la configuration email
+        async function testEmailConfig() {
+            try {
+                hideResult('configResult');
+                const response = await fetch('/api/test-email', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    const configInfo = `✅ Configuration SMTP valide
+                    
+📧 URL de l'application: ${data.appUrl}
+🔧 Host SMTP: ${data.config.host}
+📤 Port SMTP: ${data.config.port}
+👤 Utilisateur SMTP: ${data.config.user}
+📨 Expéditeur: ${data.config.from}
+
+🌍 Variables d'environnement:
+- NEXT_PUBLIC_APP_URL: ${data.environment.NEXT_PUBLIC_APP_URL || 'Non défini'}
+- VERCEL_URL: ${data.environment.VERCEL_URL || 'Non défini'}
+- NEXTAUTH_URL: ${data.environment.NEXTAUTH_URL || 'Non défini'}`;
+                    
+                    showResult('configResult', configInfo, 'success');
+                } else {
+                    showResult('configResult', `❌ Erreur: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                showResult('configResult', `❌ Erreur réseau: ${error.message}`, 'error');
+            }
+        }
+
+        // Test d'import de masse
+        async function testBulkImport() {
+            try {
+                hideResult('bulkImportResult');
+                document.getElementById('detailedResults').style.display = 'none';
+                toggleLoading(true);
+
+                const response = await fetch('/api/test-email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({
+                        type: 'bulk-import'
+                    })
+                });
+
+                const data = await response.json();
+                toggleLoading(false);
+
+                if (data.success) {
+                    // Afficher le résumé
+                    const summary = data.summary;
+                    const summaryHtml = `
+                        <div class="summary-item">
+                            <div class="summary-number">${summary.total}</div>
+                            <div class="summary-label">Total</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-number">${summary.created}</div>
+                            <div class="summary-label">Créés</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-number">${summary.emailsSent}</div>
+                            <div class="summary-label">Emails Envoyés</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-number">${summary.skipped}</div>
+                            <div class="summary-label">Ignorés</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-number">${summary.errors}</div>
+                            <div class="summary-label">Erreurs</div>
+                        </div>
+                    `;
+                    document.getElementById('summaryGrid').innerHTML = summaryHtml;
+
+                    // Afficher les détails d'import
+                    const importDetailsHtml = data.importResults.map(result => 
+                        `<div style="margin: 5px 0; padding: 10px; background: ${result.status === 'CREATED' ? '#d1fae5' : result.status === 'SKIPPED' ? '#fef3c7' : '#fee2e2'}; border-radius: 3px;">
+                            <strong>Ligne ${result.row}:</strong> ${result.email} - ${result.status} - ${result.message}
+                        </div>`
+                    ).join('');
+                    document.getElementById('importDetails').innerHTML = importDetailsHtml;
+
+                    // Afficher les détails d'emails
+                    const emailDetailsHtml = data.emailResults.map(result => 
+                        `<div style="margin: 5px 0; padding: 10px; background: ${result.status === 'SENT' ? '#d1fae5' : '#fee2e2'}; border-radius: 3px;">
+                            <strong>${result.email}:</strong> ${result.status} - ${result.message}
+                        </div>`
+                    ).join('');
+                    document.getElementById('emailDetails').innerHTML = emailDetailsHtml;
+
+                    // Afficher le message principal
+                    showResult('bulkImportResult', `✅ ${data.message}`, 'success');
+                    document.getElementById('detailedResults').style.display = 'block';
+                } else {
+                    showResult('bulkImportResult', `❌ Erreur: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                toggleLoading(false);
+                showResult('bulkImportResult', `❌ Erreur réseau: ${error.message}`, 'error');
+            }
+        }
+
+        // Vérifier si l'utilisateur est connecté
+        window.onload = function() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                showResult('configResult', '❌ Vous devez être connecté pour effectuer ces tests. Veuillez vous connecter à l\'application.', 'error');
+                document.getElementById('bulkImportBtn').disabled = true;
+            }
+        };
+    </script>
+</body>
+</html>

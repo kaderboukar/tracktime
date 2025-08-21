@@ -139,7 +139,22 @@ POST /api/test-email
     "role": "STAFF"
   }
 }
+
+# Test d'import de masse avec envoi d'emails
+POST /api/test-email
+{
+  "type": "bulk-import"
+}
 ```
+
+### **Interface de Test Web**
+Accédez à l'interface de test web : `http://localhost:3000/test-bulk-import.html`
+
+Cette interface permet de :
+- ✅ Tester la configuration SMTP
+- ✅ Simuler un import de masse (3 utilisateurs de test)
+- ✅ Vérifier l'envoi d'emails en temps réel
+- ✅ Voir les résultats détaillés
 
 ### **Réponse du Test GET**
 ```json
@@ -157,6 +172,58 @@ POST /api/test-email
     "NEXT_PUBLIC_APP_URL": "https://votre-app.vercel.app",
     "VERCEL_URL": "votre-app.vercel.app",
     "NEXTAUTH_URL": null
+  }
+}
+```
+
+### **Réponse du Test Import de Masse**
+```json
+{
+  "success": true,
+  "message": "Test d'import de masse terminé: 3 utilisateurs créés, 3 emails envoyés",
+  "importResults": [
+    {
+      "row": 1,
+      "email": "test1@example.com",
+      "status": "CREATED",
+      "message": "Utilisateur créé avec succès"
+    },
+    {
+      "row": 2,
+      "email": "test2@example.com",
+      "status": "CREATED",
+      "message": "Utilisateur créé avec succès"
+    },
+    {
+      "row": 3,
+      "email": "test3@example.com",
+      "status": "CREATED",
+      "message": "Utilisateur créé avec succès"
+    }
+  ],
+  "emailResults": [
+    {
+      "email": "test1@example.com",
+      "status": "SENT",
+      "message": "Email envoyé avec succès"
+    },
+    {
+      "email": "test2@example.com",
+      "status": "SENT",
+      "message": "Email envoyé avec succès"
+    },
+    {
+      "email": "test3@example.com",
+      "status": "SENT",
+      "message": "Email envoyé avec succès"
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "created": 3,
+    "emailsSent": 3,
+    "skipped": 0,
+    "errors": 0
   }
 }
 ```

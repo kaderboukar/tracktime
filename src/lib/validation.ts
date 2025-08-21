@@ -50,7 +50,7 @@ export const projectSchema = z.object({
   name: z.string().min(1, "Le nom est requis"),
   projectNumber: z.string().min(1, "Le numéro de projet est requis"),
   projectType: z.string().optional().default(""), // Permettre les chaînes vides
-  staffAccess: z.enum(["ALL", "OPERATION", "PROGRAMME", "SUPPORT"], {
+  staffAccess: z.enum(["ALL", "OPERATION", "PROGRAMME", "SUPPORT", "MANAGEMENT"], {
     required_error: "L'accès au staff est requis",
     invalid_type_error: "Type d'accès invalide",
   }),

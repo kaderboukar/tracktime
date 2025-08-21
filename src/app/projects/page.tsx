@@ -22,7 +22,7 @@ type Project = {
   name: string;
   projectNumber: string;
   projectType: string;
-  staffAccess: "ALL" | "OPERATION" | "PROGRAMME" | "SUPPORT";
+  staffAccess: "ALL" | "OPERATION" | "PROGRAMME" | "SUPPORT" | "MANAGEMENT";
   users: {
     id: number;
     name: string;
@@ -220,8 +220,8 @@ export default function ProjectsPage() {
           name: String(row[0]).trim(),
           projectNumber: String(row[1]).trim(),
           projectType: "", // Type vide par défaut
-          staffAccess: row[2] && ["ALL", "OPERATION", "PROGRAMME", "SUPPORT"].includes(String(row[2]).trim())
-            ? String(row[2]).trim() as "ALL" | "OPERATION" | "PROGRAMME" | "SUPPORT"
+          staffAccess: row[2] && ["ALL", "OPERATION", "PROGRAMME", "SUPPORT", "MANAGEMENT"].includes(String(row[2]).trim())
+            ? String(row[2]).trim() as "ALL" | "OPERATION" | "PROGRAMME" | "SUPPORT" | "MANAGEMENT"
             : "ALL"
         }));
 
@@ -633,6 +633,7 @@ export default function ProjectsPage() {
                       <option value="OPERATION">Opération</option>
                       <option value="PROGRAMME">Programme</option>
                       <option value="SUPPORT">Support</option>
+                      <option value="MANAGEMENT">Management</option>
                     </select>
                     {errors.staffAccess && (
                       <p className="text-red-500 text-xs mt-1">
