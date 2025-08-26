@@ -217,8 +217,17 @@ export default function TimeEntriesPage() {
         }
 
         const userId = userData.data.id;
+        const userRole = userData.data.role;
+        
+        // Vérifier que l'utilisateur a les permissions nécessaires
+        if (userRole !== "ADMIN" && userRole !== "PMSU" && userRole !== "STAFF") {
+          showNotification("Vous n'avez pas les permissions nécessaires pour accéder à cette page", 'error');
+          router.push("/dashboard");
+          return;
+        }
+        
         setFormData((prev) => ({ ...prev, userId }));
-        setUserRole(userData.data.role);
+        setUserRole(userRole);
 
         await fetchTimeEntries();
         await fetchSecondaryProjects(userId);
@@ -251,9 +260,13 @@ export default function TimeEntriesPage() {
           "Erreur lors de la récupération des entrées:",
           data.message
         );
+        if (res.status === 403) {
+          showNotification("Vous n'avez pas les permissions nécessaires pour accéder à cette page", 'error');
+        }
       }
     } catch (error) {
       console.error("Erreur lors de la récupération des entrées:", error);
+      showNotification("Erreur de connexion au serveur", 'error');
     }
   };
 
@@ -519,7 +532,7 @@ export default function TimeEntriesPage() {
   };
 
   const handleEdit = async (timeEntry: TimeEntry) => {
-    if (!["ADMIN", "PMSU"].includes(userRole)) {
+    if (!["ADMIN", "PMSU", "STAFF"].includes(userRole)) {
       showNotification("Vous n'avez pas les permissions nécessaires pour modifier les entrées", 'error');
       return;
     }
@@ -812,7 +825,7 @@ export default function TimeEntriesPage() {
   }
 
   const renderActionButtons = (entry: TimeEntry) => {
-    const canEdit = ["ADMIN", "PMSU"].includes(userRole);
+    const canEdit = ["ADMIN", "PMSU", "STAFF"].includes(userRole);
 
     return (
       <div className="flex items-center space-x-2">
@@ -908,7 +921,7 @@ export default function TimeEntriesPage() {
   };
 
   return (
-    <RoleBasedProtectedRoute allowedRoles={["ADMIN", "PMSU"]}>
+    <RoleBasedProtectedRoute allowedRoles={["ADMIN", "PMSU", "STAFF"]}>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50">
         <Toaster richColors closeButton position="top-right" />
         <Navbar />

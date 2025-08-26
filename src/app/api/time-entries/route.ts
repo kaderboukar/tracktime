@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       const targetUserId = parseInt(requestedUserId);
       
       // Vérifier que l'utilisateur peut accéder à ces données
-      if (role !== "ADMIN" && role !== "PMSU" && targetUserId !== authenticatedUserId) {
+      if (role !== "ADMIN" && role !== "PMSU" && role !== "STAFF" && targetUserId !== authenticatedUserId) {
         return NextResponse.json(
           { success: false, message: "Accès non autorisé" },
           { status: 403 }
@@ -34,8 +34,8 @@ export async function GET(request: NextRequest) {
       // Pour un userId spécifique, retourner toutes les entrées (tous statuts)
       whereClause = { userId: targetUserId };
     } else {
-      // Comportement par défaut : ADMIN/PMSU voient tout, STAFF voient seulement leurs entrées APPROVED
-      whereClause = (role === "ADMIN" || role === "PMSU")
+      // Comportement par défaut : ADMIN/PMSU/STAFF voient tout pour la gestion des entrées
+      whereClause = (role === "ADMIN" || role === "PMSU" || role === "STAFF")
         ? {}
         : { userId: authenticatedUserId, status: "APPROVED" as const };
     }
