@@ -254,7 +254,13 @@ export default function TimeEntriesPage() {
       const data = await res.json();
 
       if (data.success) {
-        setTimeEntries(data.data);
+        // Vérifier que data.data est un tableau valide
+        if (Array.isArray(data.data)) {
+          setTimeEntries(data.data);
+        } else {
+          console.error("Format de données invalide pour les entrées de temps:", data.data);
+          setTimeEntries([]);
+        }
       } else {
         console.error(
           "Erreur lors de la récupération des entrées:",
@@ -300,12 +306,34 @@ export default function TimeEntriesPage() {
   };
 
   const fetchActivities = async () => {
-    const token = localStorage.getItem("token");
-    const res = await fetch("/api/activities", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json();
-    if (res.ok) {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("Token non trouvé");
+        return;
+      }
+
+      const res = await fetch("/api/activities", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (!res.ok) {
+        console.error("Erreur lors de la récupération des activités:", res.status, res.statusText);
+        if (res.status === 401) {
+          showNotification("Session expirée, veuillez vous reconnecter", 'error');
+          router.push("/login");
+        }
+        return;
+      }
+
+      const data = await res.json();
+      
+      // Vérifier que data est un tableau
+      if (!Array.isArray(data)) {
+        console.error("Format de données invalide pour les activités:", data);
+        return;
+      }
+
       // Organiser les activités en hiérarchie
       const parentActivities = data.filter(
         (act: Activity) => act.parentId === null
@@ -319,6 +347,9 @@ export default function TimeEntriesPage() {
       });
 
       setActivities(parentActivities);
+    } catch (error) {
+      console.error("Erreur lors de la récupération des activités:", error);
+      showNotification("Erreur lors du chargement des activités", 'error');
     }
   };
 
@@ -532,7 +563,7 @@ export default function TimeEntriesPage() {
   };
 
   const handleEdit = async (timeEntry: TimeEntry) => {
-    if (!["ADMIN", "PMSU", "STAFF"].includes(userRole)) {
+    if (!["ADMIN", "PMSU"].includes(userRole)) {
       showNotification("Vous n'avez pas les permissions nécessaires pour modifier les entrées", 'error');
       return;
     }
@@ -723,18 +754,30 @@ export default function TimeEntriesPage() {
 
   // Fonction pour grouper les entrées par utilisateur
   const groupEntriesByUser = (entries: TimeEntry[]): GroupedTimeEntries[] => {
+    // Vérifier que entries est un tableau valide
+    if (!entries || !Array.isArray(entries)) {
+      console.warn("groupEntriesByUser: entries n'est pas un tableau valide", entries);
+      return [];
+    }
+
     const grouped = entries.reduce((acc, entry) => {
+      // Vérifier que l'entrée a les propriétés nécessaires
+      if (!entry || !entry.userId || !entry.user || !entry.user.name || !entry.user.indice) {
+        console.warn("groupEntriesByUser: entrée invalide", entry);
+        return acc;
+      }
+
       const existingGroup = acc.find(group => group.userId === entry.userId);
       
       if (existingGroup) {
         existingGroup.entries.push(entry);
-        existingGroup.totalHours += entry.hours;
+        existingGroup.totalHours += entry.hours || 0;
       } else {
         acc.push({
           userId: entry.userId,
           userName: entry.user.name,
           userIndice: entry.user.indice,
-          totalHours: entry.hours,
+          totalHours: entry.hours || 0,
           entries: [entry],
           isExpanded: false
         });
@@ -825,7 +868,7 @@ export default function TimeEntriesPage() {
   }
 
   const renderActionButtons = (entry: TimeEntry) => {
-    const canEdit = ["ADMIN", "PMSU", "STAFF"].includes(userRole);
+    const canEdit = ["ADMIN", "PMSU"].includes(userRole);
 
     return (
       <div className="flex items-center space-x-2">
