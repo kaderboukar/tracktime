@@ -12,7 +12,7 @@ import { WorkedHours } from "@/components/dashboard/WorkedHours";
 // import { PersonalProgress } from "@/components/dashboard/PersonalProgress";
 import { PersonalTimeEntries } from "@/components/dashboard/PersonalTimeEntries";
 //import { AdminStats } from "@/components/dashboard/AdminStats";
-import { PlusIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, ChartBarIcon } from "@heroicons/react/24/outline";
 import { ProjectsStats } from "@/components/dashboard/ProjectsStats";
 import { StaffTimeSheet } from "@/components/dashboard/StaffTimeSheet";
 import { TimeEntry, ProjectAssignment } from "@/components/dashboard/types";
@@ -462,6 +462,19 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex items-center space-x-4">
+                {/* Bouton "Statistiques par Projet" pour ADMIN, PMSU, MANAGEMENT */}
+                {(user?.role === "ADMIN" || user?.role === "PMSU" || user?.role === "MANAGEMENT") && (
+                  <button
+                    onClick={() => router.push('/project-statistics')}
+                    className="flex items-center px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl
+                             hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-md hover:shadow-lg
+                             transform hover:-translate-y-0.5"
+                  >
+                    <ChartBarIcon className="w-5 h-5 mr-2" />
+                    Statistiques par Projet
+                  </button>
+                )}
+
                 {/* Bouton "Ajouter une entrée" pour STAFF */}
                 {user?.role === "STAFF" && (
                   <button
