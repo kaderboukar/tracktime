@@ -330,7 +330,7 @@ export default function DashboardPage() {
       }
 
       // Récupérer les entrées de temps All
-      const timeEntriesAll = await fetch("/api/timeentriesAll", {
+      const timeEntriesAll = await fetch("/api/time-entries", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const timeEntriesR = await timeEntriesAll.json();
@@ -343,7 +343,7 @@ export default function DashboardPage() {
 
         // Récupérer les entrées pour l'année et le semestre actuels
         const filteredEntries = await fetch(
-          `/api/timeentriesAll?year=${currentYear}&semester=${currentSemester}`,
+          `/api/time-entries?year=${currentYear}&semester=${currentSemester}`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }

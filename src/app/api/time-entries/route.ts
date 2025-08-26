@@ -13,10 +13,14 @@ export async function GET(request: NextRequest) {
     const { userId: authenticatedUserId, role } = authResult;
     const { searchParams } = new URL(request.url);
     const requestedUserId = searchParams.get("userId");
+    const year = searchParams.get("year");
+    const semester = searchParams.get("semester");
 
     let whereClause: {
       userId?: number;
       status?: "APPROVED";
+      year?: number;
+      semester?: "S1" | "S2";
     };
 
     // Si un userId spécifique est demandé et que l'utilisateur est ADMIN/PMSU ou demande ses propres données
@@ -32,12 +36,30 @@ export async function GET(request: NextRequest) {
       }
 
       // Pour un userId spécifique, retourner toutes les entrées (tous statuts)
-      whereClause = { userId: targetUserId };
+      whereClause = { 
+        userId: targetUserId,
+        ...(year && semester ? {
+          year: parseInt(year),
+          semester: semester as "S1" | "S2"
+        } : {})
+      };
     } else {
       // Comportement par défaut : ADMIN/PMSU/STAFF voient tout pour la gestion des entrées
       whereClause = (role === "ADMIN" || role === "PMSU" || role === "STAFF")
-        ? {}
-        : { userId: authenticatedUserId, status: "APPROVED" as const };
+        ? {
+            ...(year && semester ? {
+              year: parseInt(year),
+              semester: semester as "S1" | "S2"
+            } : {})
+          }
+        : { 
+            userId: authenticatedUserId, 
+            status: "APPROVED" as const,
+            ...(year && semester ? {
+              year: parseInt(year),
+              semester: semester as "S1" | "S2"
+            } : {})
+          };
     }
 
     const timeEntries = await prisma.timeEntry.findMany({
