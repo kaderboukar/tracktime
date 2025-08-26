@@ -10,13 +10,32 @@ export async function GET(request: NextRequest) {
       return authResult;
     }
 
-    const { userId, role } = authResult;
+    const { userId: authenticatedUserId, role } = authResult;
+    const { searchParams } = new URL(request.url);
+    const requestedUserId = searchParams.get("userId");
 
-    // Si l'utilisateur est ADMIN ou PMSU, récupérer toutes les entrées
-    // Sinon, récupérer seulement ses propres entrées APPROUVÉES
-    const whereClause = (role === "ADMIN" || role === "PMSU")
-      ? {}
-      : { userId, status: "APPROVED" as const };
+    let whereClause: any;
+
+    // Si un userId spécifique est demandé et que l'utilisateur est ADMIN/PMSU ou demande ses propres données
+    if (requestedUserId) {
+      const targetUserId = parseInt(requestedUserId);
+      
+      // Vérifier que l'utilisateur peut accéder à ces données
+      if (role !== "ADMIN" && role !== "PMSU" && targetUserId !== authenticatedUserId) {
+        return NextResponse.json(
+          { success: false, message: "Accès non autorisé" },
+          { status: 403 }
+        );
+      }
+
+      // Pour un userId spécifique, retourner toutes les entrées (tous statuts)
+      whereClause = { userId: targetUserId };
+    } else {
+      // Comportement par défaut : ADMIN/PMSU voient tout, STAFF voient seulement leurs entrées APPROVED
+      whereClause = (role === "ADMIN" || role === "PMSU")
+        ? {}
+        : { userId: authenticatedUserId, status: "APPROVED" as const };
+    }
 
     const timeEntries = await prisma.timeEntry.findMany({
       where: whereClause,
@@ -44,6 +63,19 @@ export async function GET(request: NextRequest) {
           select: {
             name: true,
           },
+        },
+        validationHistory: {
+          include: {
+            validator: {
+              select: {
+                name: true,
+                indice: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
         },
       },
       orderBy: [

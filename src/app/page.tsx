@@ -10,6 +10,7 @@ import { WorkedHours } from "@/components/dashboard/WorkedHours";
 import { PersonalStats } from "@/components/dashboard/PersonalStats";
 import { PersonalTimeSheet } from "@/components/dashboard/PersonalTimeSheet";
 import { PersonalProgress } from "@/components/dashboard/PersonalProgress";
+import { PersonalTimeEntries } from "@/components/dashboard/PersonalTimeEntries";
 //import { AdminStats } from "@/components/dashboard/AdminStats";
 import { PlusIcon } from "@heroicons/react/24/outline";
 import { ProjectsStats } from "@/components/dashboard/ProjectsStats";
@@ -688,6 +689,13 @@ export default function DashboardPage() {
                             hover:shadow-xl transition-all duration-300"
                 >
                   <PersonalProgress timeEntries={timeEntries} />
+                </div>
+
+                <div
+                  className="group bg-white/70 backdrop-blur-xl p-6 rounded-2xl shadow-lg border border-white/50
+                            hover:shadow-xl transition-all duration-300"
+                >
+                  <PersonalTimeEntries userId={user.id} />
                 </div>
               </>
             )}
