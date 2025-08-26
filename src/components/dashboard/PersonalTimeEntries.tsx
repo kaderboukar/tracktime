@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { EyeIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 import ViewTimeEntryModal from "@/components/ViewTimeEntryModal";
 import CreateTimeEntryModal from "@/components/CreateTimeEntryModal";
@@ -18,6 +18,12 @@ interface TimeEntry {
   comment?: string;
   createdAt: string;
   updatedAt: string;
+  user: {
+    name: string;
+    indice: string;
+    grade?: string;
+    proformaCost?: number;
+  };
   project: {
     name: string;
     projectNumber: string;
@@ -90,18 +96,58 @@ export function PersonalTimeEntries({ userId }: PersonalTimeEntriesProps) {
     comment: "",
   });
 
-  const [activities, setActivities] = useState<any[]>([]);
-  const [projects, setProjects] = useState<any[]>([]);
+  const [activities, setActivities] = useState<Array<{
+    id: number;
+    name: string;
+    parentId: number | null;
+  }>>([]);
+  const [projects, setProjects] = useState<Array<{
+    id: number;
+    name: string;
+    projectNumber: string;
+  }>>([]);
   const [parentActivity, setParentActivity] = useState<number | null>(null);
-  const [childActivities, setChildActivities] = useState<any[]>([]);
+  const [childActivities, setChildActivities] = useState<Array<{
+    id: number;
+    name: string;
+    parentId: number | null;
+  }>>([]);
 
-  useEffect(() => {
-    fetchTimeEntries();
-    fetchActivities();
-    fetchProjects();
+  const fetchActivities = useCallback(async () => {
+    try {
+      const response = await fetch("/api/activities");
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setActivities(data.data);
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des activités:", error);
+    }
+  }, []);
+
+  const fetchProjects = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const response = await fetch(`/api/projects/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setProjects(data.data);
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des projets:", error);
+    }
   }, [userId]);
 
-  const fetchTimeEntries = async () => {
+  const fetchTimeEntries = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) return;
@@ -121,41 +167,13 @@ export function PersonalTimeEntries({ userId }: PersonalTimeEntriesProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
 
-  const fetchActivities = async () => {
-    try {
-      const response = await fetch("/api/activities");
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setActivities(data.data);
-        }
-      }
-    } catch (error) {
-      console.error("Erreur lors du chargement des activités:", error);
-    }
-  };
-
-  const fetchProjects = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return;
-
-      const response = await fetch(`/api/projects/users/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setProjects(data.data);
-        }
-      }
-    } catch (error) {
-      console.error("Erreur lors du chargement des projets:", error);
-    }
-  };
+  useEffect(() => {
+    fetchTimeEntries();
+    fetchActivities();
+    fetchProjects();
+  }, [fetchTimeEntries, fetchActivities, fetchProjects]);
 
   const handleView = (entry: TimeEntry) => {
     setSelectedEntry(entry);
@@ -547,9 +565,6 @@ export function PersonalTimeEntries({ userId }: PersonalTimeEntriesProps) {
         onConfirm={confirmDelete}
         title="Supprimer l'entrée"
         message="Êtes-vous sûr de vouloir supprimer cette entrée de temps ? Cette action est irréversible."
-        confirmText="Supprimer"
-        cancelText="Annuler"
-        confirmButtonClass="bg-red-600 hover:bg-red-700"
       />
     </div>
   );

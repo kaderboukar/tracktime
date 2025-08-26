@@ -14,7 +14,10 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const requestedUserId = searchParams.get("userId");
 
-    let whereClause: any;
+    let whereClause: {
+      userId?: number;
+      status?: "APPROVED";
+    };
 
     // Si un userId spécifique est demandé et que l'utilisateur est ADMIN/PMSU ou demande ses propres données
     if (requestedUserId) {
