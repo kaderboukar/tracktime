@@ -101,11 +101,11 @@ export function PersonalTimeEntries({ userId }: PersonalTimeEntriesProps) {
     name: string;
     parentId: number | null;
   }>>([]);
-  const [projects, setProjects] = useState<Array<{
-    id: number;
-    name: string;
-    projectNumber: string;
-  }>>([]);
+  // const [projects, setProjects] = useState<Array<{
+  //   id: number;
+  //   name: string;
+  //   projectNumber: string;
+  // }>>([]);
   const [parentActivity, setParentActivity] = useState<number | null>(null);
   const [childActivities, setChildActivities] = useState<Array<{
     id: number;
@@ -118,8 +118,11 @@ export function PersonalTimeEntries({ userId }: PersonalTimeEntriesProps) {
       const response = await fetch("/api/activities");
       if (response.ok) {
         const data = await response.json();
-        if (data.success) {
+        if (data.success && Array.isArray(data.data)) {
           setActivities(data.data);
+        } else {
+          console.error("Format de données invalide pour les activités:", data);
+          setActivities([]);
         }
       }
     } catch (error) {
@@ -127,25 +130,28 @@ export function PersonalTimeEntries({ userId }: PersonalTimeEntriesProps) {
     }
   }, []);
 
-  const fetchProjects = useCallback(async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return;
+  // const fetchProjects = useCallback(async () => {
+  //   try {
+  //     const token = localStorage.getItem("token");
+  //     if (!token) return;
 
-      const response = await fetch(`/api/projects/users/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+  //     const response = await fetch(`/api/projects/users/${userId}/secondary`, {
+  //       headers: { Authorization: `Bearer ${token}` },
+  //     });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setProjects(data.data);
-        }
-      }
-    } catch (error) {
-      console.error("Erreur lors du chargement des projets:", error);
-    }
-  }, [userId]);
+  //     if (response.ok) {
+  //       const data = await response.json();
+  //       if (data.success && Array.isArray(data.data)) {
+  //         setProjects(data.data);
+  //       } else {
+  //         console.error("Format de données invalide pour les projets:", data);
+  //         setProjects([]);
+  //       }
+  //     }
+  //   } catch (error) {
+  //     console.error("Erreur lors du chargement des projets:", error);
+  //   }
+  // }, [userId]);
 
   const fetchTimeEntries = useCallback(async () => {
     try {
@@ -172,8 +178,9 @@ export function PersonalTimeEntries({ userId }: PersonalTimeEntriesProps) {
   useEffect(() => {
     fetchTimeEntries();
     fetchActivities();
-    fetchProjects();
-  }, [fetchTimeEntries, fetchActivities, fetchProjects]);
+    // Les STAFF n'ont pas besoin de projets car ils ne peuvent pas éditer
+    // fetchProjects();
+  }, [fetchTimeEntries, fetchActivities]);
 
   const handleView = (entry: TimeEntry) => {
     setSelectedEntry(entry);
@@ -546,12 +553,8 @@ export function PersonalTimeEntries({ userId }: PersonalTimeEntriesProps) {
         formData={editFormData}
         onSubmit={handleEditSubmit}
         onChange={handleFormChange}
-        projects={projects.map((p) => ({
-          id: p.id,
-          name: p.name,
-          projectNumber: p.projectNumber,
-        }))}
-        activities={activities}
+        projects={[]}
+        activities={Array.isArray(activities) ? activities : []}
         remainingHours={480} // Valeur par défaut
         editMode={true}
         parentActivity={parentActivity}

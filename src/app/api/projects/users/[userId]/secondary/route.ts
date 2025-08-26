@@ -11,45 +11,27 @@ export async function GET(request: NextRequest) {
   const userId = authResult.userId;
 
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        type: true,
-        projects: {
+    // Récupérer les projets assignés à l'utilisateur
+    const userProjects = await prisma.userProject.findMany({
+      where: { userId },
+      include: {
+        project: {
           select: {
-            projectId: true,
-          },
-        },
-      },
-    });
-
-
-    const assignedProjectIds = user?.projects.map(p => p.projectId) || [];
-
-    // Requête modifiée avec plus de flexibilité
-    const availableProjects = await prisma.project.findMany({
-      where: {
-        OR: [
-          { staffAccess: user?.type },
-          { staffAccess: 'ALL' }  // Correction de la casse 'ALL' -> 'All'
-        ],
-        NOT: {
-          id: {
-            in: assignedProjectIds
+            id: true,
+            name: true,
+            projectNumber: true,
+            staffAccess: true
           }
         }
       },
-      select: {
-        id: true,
-        name: true,
-        projectNumber: true,
-        staffAccess: true
-      },
     });
+
+    // Extraire les projets de la relation
+    const assignedProjects = userProjects.map(up => up.project);
 
     return NextResponse.json({
       success: true,
-      data: availableProjects
+      data: assignedProjects
     });
 
   } catch (error) {

@@ -192,65 +192,32 @@ export default function TimeEntriesPage() {
     return "";
   };
 
-
-
-
-
-  useEffect(() => {
-    const initializePage = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          router.push("/login");
-          return;
-        }
-
-        const meResponse = await fetch("/api/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const userData = await meResponse.json();
-
-        if (!userData.success || !userData.data) {
-          console.error("Erreur de réponse auth/me:", userData);
-          router.push("/login");
-          return;
-        }
-
-        const userId = userData.data.id;
-        const userRole = userData.data.role;
-        
-        // Vérifier que l'utilisateur a les permissions nécessaires
-        if (userRole !== "ADMIN" && userRole !== "PMSU" && userRole !== "STAFF") {
-          showNotification("Vous n'avez pas les permissions nécessaires pour accéder à cette page", 'error');
-          router.push("/dashboard");
-          return;
-        }
-        
-        setFormData((prev) => ({ ...prev, userId }));
-        setUserRole(userRole);
-
-        await fetchTimeEntries();
-        await fetchSecondaryProjects(userId);
-        await fetchActivities();
-        await fetchRemainingHours(userId, currentSemester, currentYear);
-      } catch (error) {
-        console.error("Erreur lors de l'initialisation:", error);
-        showNotification("Erreur lors du chargement des données", 'error');
-        router.push("/login");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initializePage();
-  }, [router, currentSemester, currentYear]);
-
-  const fetchTimeEntries = async () => {
+  const fetchTimeEntries = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("Token non trouvé dans fetchTimeEntries");
+        return;
+      }
+
       const res = await fetch("/api/time-entries", {
         headers: { Authorization: `Bearer ${token}` },
       });
+
+      if (!res.ok) {
+        console.error("Erreur lors de la récupération des entrées:", res.status, res.statusText);
+        if (res.status === 401) {
+          localStorage.removeItem("token");
+          showNotification("Session expirée, veuillez vous reconnecter", 'error');
+          router.push("/login");
+          return;
+        }
+        if (res.status === 403) {
+          showNotification("Vous n'avez pas les permissions nécessaires pour accéder à cette page", 'error');
+        }
+        return;
+      }
+
       const data = await res.json();
 
       if (data.success) {
@@ -266,15 +233,147 @@ export default function TimeEntriesPage() {
           "Erreur lors de la récupération des entrées:",
           data.message
         );
-        if (res.status === 403) {
-          showNotification("Vous n'avez pas les permissions nécessaires pour accéder à cette page", 'error');
-        }
       }
     } catch (error) {
       console.error("Erreur lors de la récupération des entrées:", error);
       showNotification("Erreur de connexion au serveur", 'error');
     }
-  };
+  }, [router]);
+
+  const fetchActivities = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("Token non trouvé");
+        return;
+      }
+
+      const res = await fetch("/api/activities", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (!res.ok) {
+        console.error("Erreur lors de la récupération des activités:", res.status, res.statusText);
+        if (res.status === 401) {
+          localStorage.removeItem("token");
+          showNotification("Session expirée, veuillez vous reconnecter", 'error');
+          router.push("/login");
+          return;
+        }
+        return;
+      }
+
+      const data = await res.json();
+
+      if (Array.isArray(data)) {
+        // Organiser les activités par parent/enfant
+        const parentActivities = data.filter(
+          (activity: Activity) => !activity.parentId
+        ).map((parent: Activity) => {
+          return {
+            ...parent,
+            children: data.filter(
+              (child: Activity) => child.parentId === parent.id
+            ),
+          };
+        });
+
+        setActivities(parentActivities);
+      } else {
+        console.error("Format de données invalide pour les activités:", data);
+        setActivities([]);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération des activités:", error);
+      showNotification("Erreur lors du chargement des activités", 'error');
+    }
+  }, [router]);
+
+  useEffect(() => {
+    const initializePage = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          console.log("Aucun token trouvé, redirection vers login");
+          router.push("/login");
+          return;
+        }
+
+        // Vérifier l'expiration du token
+        try {
+          const decoded = JSON.parse(atob(token.split(".")[1]));
+          const exp = decoded.exp * 1000; // Convertir en millisecondes
+          if (Date.now() >= exp) {
+            console.log("Token expiré, redirection vers login");
+            localStorage.removeItem("token");
+            router.push("/login");
+            return;
+          }
+        } catch (error) {
+          console.error("Erreur de décodage du token:", error);
+          localStorage.removeItem("token");
+          router.push("/login");
+          return;
+        }
+
+        const meResponse = await fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!meResponse.ok) {
+          console.error("Erreur de réponse auth/me:", meResponse.status, meResponse.statusText);
+          if (meResponse.status === 401) {
+            localStorage.removeItem("token");
+            showNotification("Session expirée, veuillez vous reconnecter", 'error');
+          }
+          router.push("/login");
+          return;
+        }
+
+        const userData = await meResponse.json();
+
+        if (!userData.success || !userData.data) {
+          console.error("Erreur de réponse auth/me:", userData);
+          router.push("/login");
+          return;
+        }
+
+        const userId = userData.data.id;
+        const userRole = userData.data.role;
+        
+        console.log("Utilisateur connecté:", { userId, userRole });
+        
+        // Vérifier que l'utilisateur a les permissions nécessaires
+        if (userRole !== "ADMIN" && userRole !== "PMSU" && userRole !== "STAFF") {
+          showNotification("Vous n'avez pas les permissions nécessaires pour accéder à cette page", 'error');
+          router.push("/dashboard");
+          return;
+        }
+        
+        setFormData((prev) => ({ ...prev, userId }));
+        setUserRole(userRole);
+
+        // Charger les données dans l'ordre
+        await Promise.all([
+          fetchTimeEntries(),
+          fetchSecondaryProjects(userId),
+          fetchActivities(),
+          fetchRemainingHours(userId, currentSemester, currentYear)
+        ]);
+
+      } catch (error) {
+        console.error("Erreur lors de l'initialisation:", error);
+        showNotification("Erreur lors du chargement des données", 'error');
+        router.push("/login");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializePage();
+  }, [router, currentSemester, currentYear, fetchTimeEntries, fetchActivities]);
+
+
 
   const fetchSecondaryProjects = async (userId: number) => {
     try {
@@ -305,53 +404,7 @@ export default function TimeEntriesPage() {
     }
   };
 
-  const fetchActivities = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        console.error("Token non trouvé");
-        return;
-      }
 
-      const res = await fetch("/api/activities", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      if (!res.ok) {
-        console.error("Erreur lors de la récupération des activités:", res.status, res.statusText);
-        if (res.status === 401) {
-          showNotification("Session expirée, veuillez vous reconnecter", 'error');
-          router.push("/login");
-        }
-        return;
-      }
-
-      const data = await res.json();
-      
-      // Vérifier que data est un tableau
-      if (!Array.isArray(data)) {
-        console.error("Format de données invalide pour les activités:", data);
-        return;
-      }
-
-      // Organiser les activités en hiérarchie
-      const parentActivities = data.filter(
-        (act: Activity) => act.parentId === null
-      );
-      const childActs = data.filter((act: Activity) => act.parentId !== null);
-
-      parentActivities.forEach((parent: Activity) => {
-        parent.children = childActs.filter(
-          (child: Activity) => child.parentId === parent.id
-        );
-      });
-
-      setActivities(parentActivities);
-    } catch (error) {
-      console.error("Erreur lors de la récupération des activités:", error);
-      showNotification("Erreur lors du chargement des activités", 'error');
-    }
-  };
 
   const fetchRemainingHours = async (userId: number, semester: string, year: number) => {
     try {
@@ -814,16 +867,21 @@ export default function TimeEntriesPage() {
 
   // Mettre à jour les entrées groupées quand les données changent
   useEffect(() => {
-    const filtered = getFilteredEntries();
-    const grouped = groupEntriesByUser(filtered);
-    
-    // Préserver l'état d'expansion
-    const updatedGrouped = grouped.map(group => ({
-      ...group,
-      isExpanded: expandedUsers.has(group.userId)
-    }));
-    
-    setGroupedEntries(updatedGrouped);
+    try {
+      const filtered = getFilteredEntries();
+      const grouped = groupEntriesByUser(filtered);
+      
+      // Préserver l'état d'expansion
+      const updatedGrouped = grouped.map(group => ({
+        ...group,
+        isExpanded: expandedUsers.has(group.userId)
+      }));
+      
+      setGroupedEntries(updatedGrouped);
+    } catch (error) {
+      console.error("Erreur lors du groupement des entrées:", error);
+      setGroupedEntries([]);
+    }
   }, [timeEntries, filterStatus, searchTerm, expandedUsers, getFilteredEntries]);
 
   // Fonction pour basculer l'expansion d'un utilisateur

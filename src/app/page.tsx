@@ -7,9 +7,9 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Navbar from "@/components/Navbar";
 import { AssignedProjects } from "@/components/dashboard/AssignedProjects";
 import { WorkedHours } from "@/components/dashboard/WorkedHours";
-import { PersonalStats } from "@/components/dashboard/PersonalStats";
-import { PersonalTimeSheet } from "@/components/dashboard/PersonalTimeSheet";
-import { PersonalProgress } from "@/components/dashboard/PersonalProgress";
+// import { PersonalStats } from "@/components/dashboard/PersonalStats";
+// import { PersonalTimeSheet } from "@/components/dashboard/PersonalTimeSheet";
+// import { PersonalProgress } from "@/components/dashboard/PersonalProgress";
 import { PersonalTimeEntries } from "@/components/dashboard/PersonalTimeEntries";
 //import { AdminStats } from "@/components/dashboard/AdminStats";
 import { PlusIcon } from "@heroicons/react/24/outline";
@@ -86,7 +86,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<ProjectAssignment[]>([]); // Projets assignés pour l'affichage
   const [allProjects, setAllProjects] = useState<Project[]>([]); // Tous les projets pour le modal
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
+  // const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [totalSecondaryHours, setTotalSecondaryHours] = useState<number>(0);
   const [staffTimeSheetData, setStaffTimeSheetData] = useState<StaffTimesheetData[]>([]);
   const [projectStatsData, setProjectStatsData] = useState<ProjectStatsData[]>([]);
@@ -375,8 +375,6 @@ export default function DashboardPage() {
       });
       const timeEntriesResponse = await timeEntries.json();
       if (timeEntriesResponse.success) {
-        setTimeEntries(timeEntriesResponse.data);
-
         // Calculer les heures totales sur les projets secondaires pour le semestre actuel
         const now = new Date();
         const currentSemester = now.getMonth() < 6 ? "S1" : "S2";
@@ -464,7 +462,7 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex items-center space-x-4">
-                {/* Bouton "Ajouter une entrée" uniquement pour STAFF */}
+                {/* Bouton "Ajouter une entrée" pour STAFF */}
                 {user?.role === "STAFF" && (
                   <button
                     onClick={() => setIsTimeModalOpen(true)}
@@ -573,49 +571,49 @@ export default function DashboardPage() {
 
             {/* Statistiques personnelles pour STAFF */}
             {user?.role === "STAFF" && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/50">
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
-                      <span className="text-2xl">👤</span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+                <div className="bg-white/70 backdrop-blur-xl rounded-lg p-3 shadow-sm border border-white/50">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                      <span className="text-lg">👤</span>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">
-                        Mon Grade
+                      <p className="text-xs font-medium text-gray-600">
+                        Grade
                       </p>
-                      <p className="text-2xl font-bold text-gray-900">
+                      <p className="text-lg font-bold text-gray-900">
                         {user.grade || "N/A"}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/50">
-                  <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl">
-                      <span className="text-2xl">📊</span>
+                <div className="bg-white/70 backdrop-blur-xl rounded-lg p-3 shadow-sm border border-white/50">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-lg">
+                      <span className="text-lg">📊</span>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">
-                        Projets Actifs
+                      <p className="text-xs font-medium text-gray-600">
+                        Projets
                       </p>
-                      <p className="text-2xl font-bold text-gray-900">
+                      <p className="text-lg font-bold text-gray-900">
                         {projects.length}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/50">
+                <div className="bg-white/70 backdrop-blur-xl rounded-lg p-3 shadow-sm border border-white/50">
                   <div className="flex items-center space-x-4">
-                    <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl">
-                      <span className="text-2xl">💰</span>
+                    <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg">
+                      <span className="text-lg">💰</span>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">
-                        Coût Proforma
+                      <p className="text-xs font-medium text-gray-600">
+                        Proforma
                       </p>
-                      <p className="text-lg font-bold text-gray-900">
+                      <p className="text-sm font-bold text-gray-900">
                         {user.proformaCost
                           ? `${user.proformaCost.toLocaleString("fr-FR")} USD`
                           : "N/A"}
@@ -628,17 +626,17 @@ export default function DashboardPage() {
 
             {/* Grille principale - Uniquement pour STAFF */}
             {user?.role === "STAFF" && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div
-                  className="group bg-white/70 backdrop-blur-xl p-6 rounded-2xl shadow-lg border border-white/50
-                              hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+                  className="bg-white/70 backdrop-blur-xl p-3 rounded-lg shadow-sm border border-white/50
+                              hover:shadow-md transition-all duration-200"
                 >
                   <AssignedProjects projects={projects} />
                 </div>
 
                 <div
-                  className="group bg-white/70 backdrop-blur-xl p-6 rounded-2xl shadow-lg border border-white/50
-                              hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+                  className="bg-white/70 backdrop-blur-xl p-3 rounded-lg shadow-sm border border-white/50
+                              hover:shadow-md transition-all duration-200"
                 >
                   <WorkedHours totalHours={totalSecondaryHours} />
                 </div>
@@ -670,7 +668,7 @@ export default function DashboardPage() {
             {/* Composants spécifiques aux utilisateurs STAFF */}
             {user?.role === "STAFF" && (
               <>
-                <div
+                {/* <div
                   className="group bg-white/70 backdrop-blur-xl p-6 rounded-2xl shadow-lg border border-white/50
                             hover:shadow-xl transition-all duration-300"
                 >
@@ -689,7 +687,7 @@ export default function DashboardPage() {
                             hover:shadow-xl transition-all duration-300"
                 >
                   <PersonalProgress timeEntries={timeEntries} />
-                </div>
+                </div> */}
 
                 <div
                   className="group bg-white/70 backdrop-blur-xl p-6 rounded-2xl shadow-lg border border-white/50
@@ -710,7 +708,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Time Entry Modal - Uniquement pour STAFF */}
+      {/* Time Entry Modal - pour STAFF */}
       {user?.role === "STAFF" && (
         <CreateTimeEntryModal
           isOpen={isTimeModalOpen}
