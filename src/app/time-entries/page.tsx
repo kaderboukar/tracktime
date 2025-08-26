@@ -4,12 +4,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Toaster, toast } from 'sonner';
-import { ClockIcon, PencilIcon, TrashIcon, EyeIcon, ChevronDownIcon, ChevronRightIcon, UserIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, PencilIcon, TrashIcon, EyeIcon, ChevronDownIcon, ChevronRightIcon, UserIcon, CalendarIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import Navbar from "@/components/Navbar";
 import ViewTimeEntryModal from "@/components/ViewTimeEntryModal";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import CreateTimeEntryModal from "@/components/CreateTimeEntryModal";
 import RoleBasedProtectedRoute from "@/components/RoleBasedProtectedRoute";
+import GenerateTimesheetModal from "@/components/GenerateTimesheetModal";
 
 const getStatusBadgeClass = (status: string) => {
   switch (status) {
@@ -134,7 +135,9 @@ export default function TimeEntriesPage() {
   const [selectedTimeEntry, setSelectedTimeEntry] = useState<TimeEntryWithDetails | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isGenerateTimesheetModalOpen, setIsGenerateTimesheetModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [selectedUserForTimesheet, setSelectedUserForTimesheet] = useState<{ id: number; name: string } | null>(null);
   const router = useRouter();
   const [remainingHours, setRemainingHours] = useState<number>(480);
   const [currentYear] = useState(new Date().getFullYear());
@@ -1021,6 +1024,46 @@ export default function TimeEntriesPage() {
     }
   };
 
+  // Fonction pour ouvrir le modal de génération de feuille de temps
+  const openGenerateTimesheetModal = (userId: number, userName: string) => {
+    setSelectedUserForTimesheet({ id: userId, name: userName });
+    setIsGenerateTimesheetModalOpen(true);
+  };
+
+  // Fonction pour générer automatiquement la feuille de temps
+  const handleGenerateTimesheet = async (year: number, semester: string) => {
+    if (!selectedUserForTimesheet) return;
+    
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("/api/timesheet/auto-generate", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId: selectedUserForTimesheet.id,
+          year,
+          semester,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        showNotification(
+          `Feuille de temps générée et envoyée avec succès pour ${data.data.userName}`,
+          'success'
+        );
+      } else {
+        showNotification(data.message || "Erreur lors de la génération", 'error');
+      }
+    } catch (error) {
+      console.error("Erreur lors de la génération de la feuille de temps:", error);
+      showNotification("Erreur lors de la génération de la feuille de temps", 'error');
+    }
+  };
+
   return (
     <RoleBasedProtectedRoute allowedRoles={["ADMIN", "PMSU", "STAFF"]}>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50">
@@ -1169,6 +1212,22 @@ export default function TimeEntriesPage() {
                         
                         {/* Bouton d'expansion */}
                         <div className="flex items-center space-x-2">
+                          {/* Bouton Générer Feuille de Temps pour ADMIN/PMSU */}
+                          {["ADMIN", "PMSU"].includes(userRole) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation(); // Empêcher l'expansion du groupe
+                                openGenerateTimesheetModal(userGroup.userId, userGroup.userName);
+                              }}
+                              className="flex items-center px-3 py-1.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg
+                                       hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-sm hover:shadow-md
+                                       transform hover:-translate-y-0.5 text-xs font-medium"
+                              title={`Générer la feuille de temps pour ${userGroup.userName}`}
+                            >
+                              <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
+                              Feuille de Temps
+                            </button>
+                          )}
                           {isExpanded ? (
                             <ChevronDownIcon className="w-5 h-5 text-gray-400" />
                           ) : (
@@ -1311,6 +1370,16 @@ export default function TimeEntriesPage() {
           onConfirm={confirmDelete}
           title="Confirmer la suppression"
           message="Êtes-vous sûr de vouloir supprimer cette entrée de temps ? Cette action est irréversible."
+        />
+
+        <GenerateTimesheetModal
+          isOpen={isGenerateTimesheetModalOpen}
+          onClose={() => {
+            setIsGenerateTimesheetModalOpen(false);
+            setSelectedUserForTimesheet(null);
+          }}
+          onGenerate={handleGenerateTimesheet}
+          userName={selectedUserForTimesheet?.name || ''}
         />
       </div>
     </RoleBasedProtectedRoute>

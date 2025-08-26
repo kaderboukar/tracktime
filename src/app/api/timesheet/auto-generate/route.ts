@@ -99,8 +99,14 @@ export async function POST(request: NextRequest) {
     // Générer le PDF
     const pdfBuffer = await generateTimesheetPDF(timesheetData);
     
-    // Envoyer l'email avec le PDF
-    const emailSent = await sendTimesheetEmail(staffUser.email, staffUser.name, pdfBuffer, year, semester);
+    // Envoyer l'email avec le PDF en utilisant votre système email existant
+    const { sendTimesheetEmail } = await import('@/lib/email');
+    const emailSent = await sendTimesheetEmail({
+      userName: staffUser.name,
+      year,
+      semester,
+      pdfBuffer
+    });
 
     return NextResponse.json({
       success: true,
@@ -234,99 +240,4 @@ async function generateTimesheetPDF(timesheetData: {
   return doc.output('arraybuffer');
 }
 
-// Fonction pour envoyer l'email avec le PDF
-async function sendTimesheetEmail(userEmail: string, userName: string, pdfBuffer: ArrayBuffer, year: string, semester: string) {
-  try {
-    const nodemailer = await import('nodemailer');
-    
-    // Configuration du transporteur email (utilise la même config que le système existant)
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASSWORD,
-      },
-    });
 
-    // Fonction utilitaire pour formater l'expéditeur
-    const getFormattedSender = (): string => {
-      return `"WORKLOAD STUDY SURVEY" <${process.env.SMTP_FROM}>`;
-    };
-
-    // Template HTML pour l'email de feuille de temps
-    const getTimesheetEmailTemplate = (userName: string, year: string, semester: string) => `
-      <!DOCTYPE html>
-      <html>
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Feuille de Temps - Signature Requise</title>
-          <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-              .button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-              .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
-              .highlight { background: #e3f2fd; padding: 15px; border-left: 4px solid #2196f3; margin: 20px 0; }
-          </style>
-      </head>
-      <body>
-          <div class="container">
-              <div class="header">
-                  <h1>WORKLOAD STUDY SURVEY</h1>
-                  <h2>Feuille de Temps - Signature Requise</h2>
-              </div>
-              <div class="content">
-                  <p>Bonjour <strong>${userName}</strong>,</p>
-                  
-                  <div class="highlight">
-                      <p><strong>Votre feuille de temps pour ${year} ${semester} est prête pour signature.</strong></p>
-                      <p>Le document PDF est joint à cet email.</p>
-                  </div>
-                  
-                  <h3>Instructions :</h3>
-                  <ol>
-                      <li>Téléchargez le PDF joint</li>
-                      <li>Vérifiez les informations contenues</li>
-                      <li>Signez électroniquement le document</li>
-                      <li>Retournez le document signé par email</li>
-                  </ol>
-                  
-                  <p><strong>Important :</strong> Veuillez retourner le document signé dans les plus brefs délais.</p>
-                  
-                  <p>Cordialement,<br>
-                  <strong>L'équipe WORKLOAD STUDY SURVEY</strong></p>
-              </div>
-              <div class="footer">
-                  <p>Cet email a été envoyé automatiquement par WORKLOAD STUDY SURVEY. Merci de ne pas répondre à ce message.</p>
-              </div>
-          </div>
-      </body>
-      </html>
-    `;
-
-    const mailOptions = {
-      from: getFormattedSender(),
-      to: userEmail,
-      subject: `Feuille de temps ${year} ${semester} - Signature requise`,
-      html: getTimesheetEmailTemplate(userName, year, semester),
-      attachments: [
-        {
-          filename: `feuille_temps_${userName}_${year}_${semester}.pdf`,
-          content: Buffer.from(pdfBuffer),
-          contentType: 'application/pdf'
-        }
-      ]
-    };
-
-    await transporter.sendMail(mailOptions);
-    console.log(`Email de feuille de temps envoyé avec succès à ${userEmail} pour ${userName}`);
-    return true;
-  } catch (error) {
-    console.error('Erreur lors de l\'envoi de l\'email de feuille de temps:', error);
-    return false;
-  }
-}

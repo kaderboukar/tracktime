@@ -19,6 +19,7 @@ export default function GenerateTimesheetModal({
     new Date().getMonth() < 6 ? 'S1' : 'S2'
   );
 
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onGenerate(selectedYear, selectedSemester);
@@ -112,6 +113,8 @@ export default function GenerateTimesheetModal({
               </div>
             </div>
 
+
+
             {/* Actions */}
             <div className="flex items-center justify-end space-x-3 pt-4">
               <button
@@ -127,6 +130,7 @@ export default function GenerateTimesheetModal({
                          hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-md hover:shadow-lg
                          transform hover:-translate-y-0.5"
               >
+                <DocumentArrowDownIcon className="w-4 h-4 inline mr-2" />
                 Générer et Envoyer
               </button>
             </div>
