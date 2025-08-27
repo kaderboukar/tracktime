@@ -11,27 +11,38 @@ export async function GET(request: NextRequest) {
   const userId = authResult.userId;
 
   try {
+    // Récupérer TOUS les projets
+    const allProjects = await prisma.project.findMany({
+      select: {
+        id: true,
+        name: true,
+        projectNumber: true,
+        staffAccess: true
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    });
+
     // Récupérer les projets assignés à l'utilisateur
     const userProjects = await prisma.userProject.findMany({
       where: { userId },
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true,
-            projectNumber: true,
-            staffAccess: true
-          }
-        }
-      },
+      select: {
+        projectId: true
+      }
     });
 
-    // Extraire les projets de la relation
-    const assignedProjects = userProjects.map(up => up.project);
+    // Extraire les IDs des projets assignés
+    const assignedProjectIds = userProjects.map(up => up.projectId);
+
+    // Filtrer pour garder seulement les projets NON assignés
+    const availableProjects = allProjects.filter(project => 
+      !assignedProjectIds.includes(project.id)
+    );
 
     return NextResponse.json({
       success: true,
-      data: assignedProjects
+      data: availableProjects
     });
 
   } catch (error) {
