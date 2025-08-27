@@ -68,12 +68,12 @@ async function main() {
       update: {},
       create: {
         email: 'staff1@undp.org',
-        password: await bcrypt.hash('Staff@123', 10),
-        name: 'John Doe',
-        indice: 'STAFF001',
-        grade: 'G5',
-        type: 'OPERATION',
-        role: 'STAFF',
+      password: await bcrypt.hash('Staff@123', 10),
+      name: 'John Doe',
+      indice: 'STAFF001',
+      grade: 'G5',
+      type: 'OPERATION',
+      role: 'STAFF',
         signature: '/staff1-signature.png',
         isActive: true,
       },
@@ -135,7 +135,7 @@ async function main() {
         type: 'PROGRAMME',
         role: 'STAFF',
         signature: '/staff5-signature.png',
-        isActive: true,
+      isActive: true,
       },
     }),
   ]);
@@ -166,16 +166,16 @@ async function main() {
     // Coûts pour 2025
     ...staffUsers.map(user => 
       prisma.userProformaCost.upsert({
-        where: {
-          userId_year: {
+    where: {
+      userId_year: {
             userId: user.id,
-            year: 2025
-          }
-        },
-        update: {},
-        create: {
+        year: 2025
+      }
+    },
+    update: {},
+    create: {
           userId: user.id,
-          year: 2025,
+      year: 2025,
           cost: Math.floor(Math.random() * 30000) + 65000, // 65k-95k USD
         },
       })
@@ -189,24 +189,24 @@ async function main() {
 
   const projects = await Promise.all([
     prisma.project.upsert({
-      where: { projectNumber: 'PROJ001' },
-      update: {},
-      create: {
-        name: 'Projet Développement Durable',
-        projectNumber: 'PROJ001',
-        projectType: 'Programme',
-        staffAccess: 'ALL',
-      },
+    where: { projectNumber: 'PROJ001' },
+    update: {},
+    create: {
+      name: 'Projet Développement Durable',
+      projectNumber: 'PROJ001',
+      projectType: 'Programme',
+      staffAccess: 'ALL',
+    },
     }),
     prisma.project.upsert({
-      where: { projectNumber: 'PROJ002' },
-      update: {},
-      create: {
-        name: 'Initiative Climat',
-        projectNumber: 'PROJ002',
-        projectType: 'Opération',
-        staffAccess: 'OPERATION',
-      },
+    where: { projectNumber: 'PROJ002' },
+    update: {},
+    create: {
+      name: 'Initiative Climat',
+      projectNumber: 'PROJ002',
+      projectType: 'Opération',
+      staffAccess: 'OPERATION',
+    },
     }),
     prisma.project.upsert({
       where: { projectNumber: 'PROJ003' },
@@ -366,18 +366,18 @@ async function main() {
 
     // Staff 3 - Projets 4, 5
     prisma.userProject.upsert({
-      where: {
-        userId_projectId: {
+    where: {
+      userId_projectId: {
           userId: staffUsers[2].id,
           projectId: projects[3].id
-        }
-      },
-      update: {},
-      create: {
+      }
+    },
+    update: {},
+    create: {
         userId: staffUsers[2].id,
         projectId: projects[3].id,
-        allocationPercentage: 60.0,
-      },
+      allocationPercentage: 60.0,
+    },
     }),
     prisma.userProject.upsert({
       where: {
@@ -410,18 +410,18 @@ async function main() {
       },
     }),
     prisma.userProject.upsert({
-      where: {
-        userId_projectId: {
+    where: {
+      userId_projectId: {
           userId: staffUsers[3].id,
           projectId: projects[5].id
-        }
-      },
-      update: {},
-      create: {
+      }
+    },
+    update: {},
+    create: {
         userId: staffUsers[3].id,
         projectId: projects[5].id,
-        allocationPercentage: 40.0,
-      },
+      allocationPercentage: 40.0,
+    },
     }),
     prisma.userProject.upsert({
       where: {
@@ -491,39 +491,39 @@ async function main() {
   const activities = await Promise.all([
     // Activités parentes
     prisma.activity.upsert({
-      where: { id: 1 },
-      update: {},
-      create: {
-        name: 'Gestion de Projet',
-        parentId: null,
-      },
+    where: { id: 1 },
+    update: {},
+    create: {
+      name: 'Gestion de Projet',
+      parentId: null,
+    },
     }),
     prisma.activity.upsert({
-      where: { id: 2 },
-      update: {},
-      create: {
+    where: { id: 2 },
+    update: {},
+    create: {
         name: 'Recherche et Développement',
         parentId: null,
-      },
+    },
     }),
     prisma.activity.upsert({
-      where: { id: 3 },
-      update: {},
-      create: {
+    where: { id: 3 },
+    update: {},
+    create: {
         name: 'Formation et Capacitation',
         parentId: null,
-      },
+    },
     }),
     prisma.activity.upsert({
-      where: { id: 4 },
-      update: {},
-      create: {
+    where: { id: 4 },
+    update: {},
+    create: {
         name: 'Évaluation et Suivi',
-        parentId: null,
-      },
+      parentId: null,
+    },
     }),
     prisma.activity.upsert({
-      where: { id: 5 },
+    where: { id: 5 },
       update: {},
       create: {
         name: 'Support Institutionnel',
@@ -560,9 +560,9 @@ async function main() {
     // Sous-activités pour Recherche et Développement
     prisma.activity.upsert({
       where: { id: 9 },
-      update: {},
-      create: {
-        name: 'Analyse de Données',
+    update: {},
+    create: {
+      name: 'Analyse de Données',
         parentId: 2,
       },
     }),
@@ -670,50 +670,50 @@ async function main() {
   const timeEntries = await Promise.all([
     // Entrées pour Staff 1 - S1 2024
     prisma.timeEntry.upsert({
-      where: { id: 1 },
-      update: {},
-      create: {
+    where: { id: 1 },
+    update: {},
+    create: {
         userId: staffUsers[0].id,
         projectId: projects[0].id,
         activityId: 6, // Planification
-        semester: 'S1',
+      semester: 'S1',
         year: 2024,
-        hours: 25.5,
-        status: 'APPROVED',
-        comment: 'Planification du projet développement durable',
+      hours: 25.5,
+      status: 'APPROVED',
+      comment: 'Planification du projet développement durable',
         validatedAt: new Date('2024-03-15'),
         validatedBy: adminUser.id,
-      },
+    },
     }),
     prisma.timeEntry.upsert({
-      where: { id: 2 },
-      update: {},
-      create: {
+    where: { id: 2 },
+    update: {},
+    create: {
         userId: staffUsers[0].id,
         projectId: projects[1].id,
         activityId: 9, // Analyse de Données
-        semester: 'S1',
+      semester: 'S1',
         year: 2024,
-        hours: 18.0,
-        status: 'APPROVED',
-        comment: 'Analyse des données climatiques',
+      hours: 18.0,
+      status: 'APPROVED',
+      comment: 'Analyse des données climatiques',
         validatedAt: new Date('2024-03-20'),
         validatedBy: pmsuUser.id,
-      },
+    },
     }),
     prisma.timeEntry.upsert({
-      where: { id: 3 },
-      update: {},
-      create: {
+    where: { id: 3 },
+    update: {},
+    create: {
         userId: staffUsers[0].id,
         projectId: projects[2].id,
         activityId: 8, // Suivi et Reporting
-        semester: 'S1',
+      semester: 'S1',
         year: 2024,
-        hours: 32.0,
-        status: 'PENDING',
-        comment: 'Suivi des indicateurs de performance',
-      },
+      hours: 32.0,
+      status: 'PENDING',
+      comment: 'Suivi des indicateurs de performance',
+    },
     }),
 
     // Entrées pour Staff 2 - S1 2024

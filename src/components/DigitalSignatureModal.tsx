@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import Image from 'next/image';
 import { XMarkIcon, CheckIcon } from '@heroicons/react/24/outline';
 
 interface DigitalSignatureModalProps {
@@ -208,7 +209,7 @@ export default function DigitalSignatureModal({
             <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
               <h4 className="font-medium text-green-800 mb-2">Signature sauvegardée ✓</h4>
               <div className="flex items-center space-x-3">
-                <img src={signature} alt="Signature" className="h-12 border border-gray-300 rounded" />
+                <Image src={signature} alt="Signature" width={48} height={48} className="border border-gray-300 rounded" />
                 <span className="text-sm text-green-700">
                   Votre signature est prête. Cliquez sur &quot;Signer le Document&quot; pour finaliser.
                 </span>

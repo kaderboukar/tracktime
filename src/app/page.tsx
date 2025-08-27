@@ -16,14 +16,8 @@ import { PlusIcon, ChartBarIcon } from "@heroicons/react/24/outline";
 import { ProjectsStats } from "@/components/dashboard/ProjectsStats";
 import { StaffTimeSheet } from "@/components/dashboard/StaffTimeSheet";
 import { TimeEntry, ProjectAssignment } from "@/components/dashboard/types";
-import CreateTimeEntryModal from "@/components/CreateTimeEntryModal";
 
-interface Project {
-  id: number;
-  name: string;
-  projectNumber: string;
-  staffAccess: string;
-}
+
 
 
 
@@ -85,43 +79,22 @@ type User = {
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [projects, setProjects] = useState<ProjectAssignment[]>([]); // Projets assignés pour l'affichage
-  const [allProjects, setAllProjects] = useState<Project[]>([]); // Tous les projets pour le modal
   // const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [totalSecondaryHours, setTotalSecondaryHours] = useState<number>(0);
   const [staffTimeSheetData, setStaffTimeSheetData] = useState<StaffTimesheetData[]>([]);
   const [projectStatsData, setProjectStatsData] = useState<ProjectStatsData[]>([]);
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isTimeModalOpen, setIsTimeModalOpen] = useState(false);
-
-  // États pour le modal de création d'entrée de temps
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [activities, setActivities] = useState<any[]>([]);
-  const [parentActivity, setParentActivity] = useState<number | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [childActivities, setChildActivities] = useState<any[]>([]);
-  const [formData, setFormData] = useState({
-    id: undefined,
-    userId: 0,
-    projectId: 0,
-    activityId: 0,
-    hours: 0,
-    semester: new Date().getMonth() < 6 ? ("S1" as const) : ("S2" as const),
-    year: new Date().getFullYear(),
-    comment: "",
-  });
 
   const router = useRouter();
 
   useEffect(() => {
     fetchData();
-    fetchActivities();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (user) {
-      setFormData((prev) => ({ ...prev, userId: user.id }));
       if (user.role === "STAFF") {
         fetchAvailableProjects(user.id); // Charger les projets disponibles pour STAFF
       } else if (user.role === "ADMIN" || user.role === "PMSU") {
@@ -130,24 +103,7 @@ export default function DashboardPage() {
     }
   }, [user]);
 
-  const fetchActivities = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
 
-    try {
-      const response = await fetch("/api/activities", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        setActivities(data);
-      } else {
-        console.error("Format de données invalide pour les activités");
-      }
-    } catch (error) {
-      console.error("Erreur lors du chargement des activités:", error);
-    }
-  };
 
   const fetchAvailableProjects = async (userId: number) => {
     const token = localStorage.getItem("token");
@@ -160,19 +116,19 @@ export default function DashboardPage() {
       });
       const data = await response.json();
       if (data.success && Array.isArray(data.data)) {
-        setAllProjects(data.data);
+        setProjects(data.data);
       } else {
         console.error(
           "Format de données invalide pour les projets disponibles"
         );
-        setAllProjects([]);
+        setProjects([]);
       }
     } catch (error) {
       console.error(
         "Erreur lors du chargement des projets disponibles:",
         error
       );
-      setAllProjects([]);
+      setProjects([]);
     }
   };
 
@@ -220,73 +176,9 @@ export default function DashboardPage() {
     }
   };
 
-  const handleParentActivityChange = (activityId: number) => {
-    setParentActivity(activityId);
-    const children = activities.filter(
-      (activity) => activity.parentId === activityId
-    );
-    setChildActivities(children);
-    setFormData((prev) => ({ ...prev, activityId: 0 }));
-  };
 
-  const handleFormChange = (
-    field: keyof typeof formData,
-    value: number | string
-  ) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const token = localStorage.getItem("token");
-    if (!token) return;
 
-    try {
-      // Préparer les données à envoyer
-      const submitData = {
-        ...formData,
-        // Si pas de sous-activités sélectionnées, utiliser l'activité parente
-        activityId: formData.activityId || parentActivity,
-      };
-
-      const response = await fetch("/api/time-entries", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(submitData),
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setIsTimeModalOpen(false);
-        fetchData(); // Recharger les données
-        // Reset form
-        setFormData({
-          id: undefined,
-          userId: user?.id || 0,
-          projectId: 0,
-          activityId: 0,
-          hours: 0,
-          semester: new Date().getMonth() < 6 ? "S1" : "S2",
-          year: new Date().getFullYear(),
-          comment: "",
-        });
-        setParentActivity(null);
-        setChildActivities([]);
-      } else {
-        console.error("Erreur lors de la création:", data.message);
-        alert("Erreur lors de la création de l'entrée: " + data.message);
-      }
-    } catch (error) {
-      console.error("Erreur lors de la soumission:", error);
-      alert("Erreur lors de la soumission");
-    }
-  };
-
-  // Calculer les heures restantes
-  const remainingHours = 480 - totalSecondaryHours;
 
   const fetchData = async () => {
     const token = localStorage.getItem("token");
@@ -478,7 +370,7 @@ export default function DashboardPage() {
                 {/* Bouton "Ajouter une entrée" pour STAFF */}
                 {user?.role === "STAFF" && (
                   <button
-                    onClick={() => setIsTimeModalOpen(true)}
+                    onClick={() => router.push('/time-entry/new')}
                     className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl
                              hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg
                              transform hover:-translate-y-0.5"
@@ -721,27 +613,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Time Entry Modal - pour STAFF */}
-      {user?.role === "STAFF" && (
-        <CreateTimeEntryModal
-          isOpen={isTimeModalOpen}
-          onClose={() => setIsTimeModalOpen(false)}
-          formData={formData}
-          onSubmit={handleSubmit}
-          onChange={handleFormChange}
-          projects={allProjects.map((p) => ({
-            id: p.id,
-            name: p.name,
-            projectNumber: p.projectNumber,
-          }))}
-          activities={activities}
-          remainingHours={remainingHours}
-          editMode={false}
-          parentActivity={parentActivity}
-          childActivities={childActivities}
-          onParentActivityChange={handleParentActivityChange}
-        />
-      )}
+
     </ProtectedRoute>
   );
 }

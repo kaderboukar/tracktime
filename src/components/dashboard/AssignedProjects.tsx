@@ -3,6 +3,13 @@ import { ProjectAssignment } from "./types";
 import { FolderIcon, CurrencyDollarIcon } from "@heroicons/react/24/outline";
 
 export function AssignedProjects({ projects }: { projects: ProjectAssignment[] }) {
+  // Filtrer les projets valides
+  const validProjects = projects.filter(project => 
+    project && 
+    project.project && 
+    project.project.name
+  );
+
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
@@ -10,18 +17,18 @@ export function AssignedProjects({ projects }: { projects: ProjectAssignment[] }
           Mes projets assignés
         </h2>
         <span className="px-2 py-0.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-full">
-          {projects.length}
+          {validProjects.length}
         </span>
       </div>
 
-      {projects.length === 0 ? (
+      {validProjects.length === 0 ? (
         <div className="flex items-center justify-center p-3 text-center">
           <FolderIcon className="w-6 h-6 text-gray-300 mr-2" />
           <p className="text-xs text-gray-500">Aucun projet assigné</p>
         </div>
       ) : (
         <div className="space-y-1.5">
-          {projects.slice(0, 2).map((project) => (
+          {validProjects.slice(0, 2).map((project) => (
             <div
               key={project.projectId}
               className="flex items-center justify-between p-2 rounded-md border border-gray-100 hover:border-blue-200 
@@ -31,25 +38,25 @@ export function AssignedProjects({ projects }: { projects: ProjectAssignment[] }
                 <FolderIcon className="w-4 h-4 text-blue-600 flex-shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-900 truncate">
-                    {project.project.name}
+                    {project.project?.name || 'Projet sans nom'}
                   </p>
                   <p className="text-xs text-gray-500 truncate">
-                    {project.project.projectNumber}
+                    {project.project?.projectNumber || 'N/A'}
                   </p>
                 </div>
               </div>
               
               <div className="flex items-center px-2 py-1 rounded-full bg-green-50 text-green-600 flex-shrink-0">
                 <CurrencyDollarIcon className="w-3 h-3 mr-1" />
-                <span className="text-xs font-medium">{project.allocationPercentage}%</span>
+                <span className="text-xs font-medium">{project.allocationPercentage || 0}%</span>
               </div>
             </div>
           ))}
           
-          {projects.length > 2 && (
+          {validProjects.length > 2 && (
             <div className="text-center pt-1">
               <span className="text-xs text-gray-400">
-                +{projects.length - 2} autres
+                +{validProjects.length - 2} autres
               </span>
             </div>
           )}

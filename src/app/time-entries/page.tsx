@@ -1241,76 +1241,76 @@ export default function TimeEntriesPage() {
                   {/* Détails des entrées (expandable) */}
                   {isExpanded && (
                     <div className="border-t border-gray-100 bg-gray-50/30">
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b border-gray-100 bg-gray-50/50">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/50">
                               <th className="px-6 py-3 text-left">
-                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</span>
-                              </th>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</span>
+                    </th>
                               <th className="px-6 py-3 text-left">
-                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Projet</span>
-                              </th>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Projet</span>
+                    </th>
                               <th className="px-6 py-3 text-left">
-                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Activité</span>
-                              </th>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Activité</span>
+                    </th>
                               <th className="px-6 py-3 text-left">
-                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Période</span>
-                              </th>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Période</span>
+                    </th>
                               <th className="px-6 py-3 text-left">
-                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Heures</span>
-                              </th>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Heures</span>
+                    </th>
                               <th className="px-6 py-3 text-left">
-                                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</span>
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-50">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
                             {userGroup.entries.map((entry) => (
                               <tr key={entry.id} className="hover:bg-gray-50/50 transition-colors duration-200">
-                                <td className="px-6 py-4">
-                                  <div className="flex flex-col space-y-2">
-                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusBadgeClass(entry.status || 'PENDING')}`}>
-                                      {getStatusTranslation(entry.status || 'PENDING')}
-                                    </span>
-                                    {entry.comment && (
-                                      <span className="text-xs text-gray-500 max-w-xs truncate" title={entry.comment}>
-                                        {entry.comment}
-                                      </span>
-                                    )}
-                                    {renderValidationButtons(entry)}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <div>
-                                    <p className="text-sm font-medium text-gray-900">{entry.project.name}</p>
-                                    <p className="text-xs text-gray-500">{entry.project.projectNumber}</p>
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
-                                    {entry.activity.name}
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <div>
-                                    <span className="text-sm font-medium text-gray-900">{entry.semester}</span>
-                                    <span className="text-sm text-gray-500 ml-1">{entry.year}</span>
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-100">
-                                    {entry.hours}h
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4">
-                                  {renderActionButtons(entry)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col space-y-2">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusBadgeClass(entry.status || 'PENDING')}`}>
+                            {getStatusTranslation(entry.status || 'PENDING')}
+                          </span>
+                          {entry.comment && (
+                            <span className="text-xs text-gray-500 max-w-xs truncate" title={entry.comment}>
+                              {entry.comment}
+                            </span>
+                          )}
+                          {renderValidationButtons(entry)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{entry.project.name}</p>
+                          <p className="text-xs text-gray-500">{entry.project.projectNumber}</p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                          {entry.activity.name}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <span className="text-sm font-medium text-gray-900">{entry.semester}</span>
+                          <span className="text-sm text-gray-500 ml-1">{entry.year}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-100">
+                          {entry.hours}h
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {renderActionButtons(entry)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
                     </div>
                   )}
                 </div>
@@ -1323,7 +1323,7 @@ export default function TimeEntriesPage() {
             <div className="text-center py-12">
               <div className="mx-auto h-24 w-24 text-gray-300">
                 <ClockIcon className="w-full h-full" />
-              </div>
+                </div>
               <h3 className="mt-4 text-lg font-medium text-gray-900">Aucune entrée de temps</h3>
               <p className="mt-2 text-gray-500">
                 {searchTerm || filterStatus !== 'ALL' 
@@ -1331,7 +1331,7 @@ export default function TimeEntriesPage() {
                   : "Aucune entrée de temps n'a été trouvée."
                 }
               </p>
-            </div>
+              </div>
           )}
         </div>
 
