@@ -30,6 +30,11 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Récupérer d'abord la période active
+    const activePeriod = await prisma.timePeriod.findFirst({
+      where: { isActive: true }
+    });
+
     // Récupérer toutes les entrées de temps APPROUVÉES avec les informations du projet
     const timeEntries = await prisma.timeEntry.findMany({
       where: {
@@ -93,10 +98,20 @@ export async function GET(req: NextRequest) {
       acc[key].users.add(entry.user.name);
       acc[key].activities.add(entry.activity.name);
 
-      // Ajouter le coût proforma de l'utilisateur pour cette année
-      const proformaCostForYear = entry.user.proformaCosts.find(pc => pc.year === entry.year);
+      // Ajouter le coût proforma de l'utilisateur pour la période active (pas l'année de l'entrée)
+      const targetYear = activePeriod?.year || entry.year;
+      const proformaCostForYear = entry.user.proformaCosts.find(pc => pc.year === targetYear);
       if (proformaCostForYear && !acc[key].userProformaCosts.has(entry.userId)) {
         acc[key].userProformaCosts.set(entry.userId, proformaCostForYear.cost);
+      }
+      
+      // Debug pour le premier projet
+      if (entry.projectId === 1) {
+        console.log(`Debug coût proforma pour projet ${entry.project.name}:`);
+        console.log(`  - Année cible: ${targetYear}`);
+        console.log(`  - Coûts proforma disponibles:`, entry.user.proformaCosts);
+        console.log(`  - Coût trouvé:`, proformaCostForYear);
+        console.log(`  - Coût final:`, proformaCostForYear?.cost || 0);
       }
 
       return acc;

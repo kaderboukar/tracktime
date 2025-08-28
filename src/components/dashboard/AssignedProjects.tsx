@@ -1,8 +1,17 @@
 // components/dashboard/AssignedProjects.tsx
 import { ProjectAssignment } from "./types";
 import { FolderIcon, CurrencyDollarIcon } from "@heroicons/react/24/outline";
+import { useState } from "react";
 
-export function AssignedProjects({ projects }: { projects: ProjectAssignment[] }) {
+export function AssignedProjects({ 
+  projects, 
+  activePeriod 
+}: { 
+  projects: ProjectAssignment[];
+  activePeriod?: { year: number; semester: "S1" | "S2" } | null;
+}) {
+  const [loading, setLoading] = useState(false);
+
   // Filtrer les projets valides
   const validProjects = projects.filter(project => 
     project && 
@@ -10,15 +19,30 @@ export function AssignedProjects({ projects }: { projects: ProjectAssignment[] }
     project.project.name
   );
 
+
+
   return (
     <div>
+
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-base font-semibold text-gray-900">
-          Mes projets assignés
-        </h2>
-        <span className="px-2 py-0.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-full">
-          {validProjects.length}
-        </span>
+        <div>
+          <h2 className="text-base font-semibold text-gray-900">
+            Mes projets assignés
+          </h2>
+          {activePeriod && (
+            <p className="text-xs text-gray-500 mt-1">
+              Période : {activePeriod.year} - {activePeriod.semester}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center space-x-2">
+          {loading && (
+            <div className="animate-spin rounded-full h-3 w-3 border-b border-blue-600"></div>
+          )}
+          <span className="px-2 py-0.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-full">
+            {validProjects.length}
+          </span>
+        </div>
       </div>
 
       {validProjects.length === 0 ? (
@@ -27,36 +51,44 @@ export function AssignedProjects({ projects }: { projects: ProjectAssignment[] }
           <p className="text-xs text-gray-500">Aucun projet assigné</p>
         </div>
       ) : (
-        <div className="space-y-1.5">
-          {validProjects.slice(0, 2).map((project) => (
-            <div
-              key={project.projectId}
-              className="flex items-center justify-between p-2 rounded-md border border-gray-100 hover:border-blue-200 
-                       bg-gray-50/50 hover:bg-blue-50/50 transition-all duration-150"
-            >
-              <div className="flex items-center space-x-2 min-w-0 flex-1">
-                <FolderIcon className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {project.project?.name || 'Projet sans nom'}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {project.project?.projectNumber || 'N/A'}
-                  </p>
+        <div className="space-y-2">
+          {validProjects.slice(0, 3).map((project) => {
+
+            return (
+              <div
+                key={project.projectId}
+                className="p-3 rounded-lg border border-gray-200 hover:border-blue-300 
+                         bg-white hover:bg-blue-50/30 transition-all duration-200 shadow-sm"
+              >
+                {/* En-tête du projet */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2 min-w-0 flex-1">
+                    <FolderIcon className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {project.project?.name || 'Projet sans nom'}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {project.project?.projectNumber || 'N/A'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center px-2 py-1 rounded-full bg-green-50 text-green-600 flex-shrink-0">
+                    <CurrencyDollarIcon className="w-3 h-3 mr-1" />
+                    <span className="text-xs font-medium">{project.allocationPercentage || 0}%</span>
+                  </div>
                 </div>
+
+
               </div>
-              
-              <div className="flex items-center px-2 py-1 rounded-full bg-green-50 text-green-600 flex-shrink-0">
-                <CurrencyDollarIcon className="w-3 h-3 mr-1" />
-                <span className="text-xs font-medium">{project.allocationPercentage || 0}%</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
           
-          {validProjects.length > 2 && (
-            <div className="text-center pt-1">
+          {validProjects.length > 3 && (
+            <div className="text-center pt-2">
               <span className="text-xs text-gray-400">
-                +{validProjects.length - 2} autres
+                +{validProjects.length - 3} autres projets
               </span>
             </div>
           )}

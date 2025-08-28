@@ -44,14 +44,41 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Récupérer les paramètres de filtrage
+    const { searchParams } = new URL(request.url);
+    const year = searchParams.get("year");
+    const semester = searchParams.get("semester");
+
+    // Récupérer d'abord la période active
+    const activePeriod = await prisma.timePeriod.findFirst({
+      where: { isActive: true }
+    });
+
+    // Construire la clause where avec filtres optionnels
+    const whereClause: any = {
+      status: "APPROVED",
+      user: {
+        role: "STAFF"
+      }
+    };
+
+    // Si aucun filtre n'est spécifié, utiliser la période active
+    if (!year || !semester) {
+      if (activePeriod) {
+        whereClause.year = activePeriod.year;
+        whereClause.semester = activePeriod.semester;
+        console.log(`  - Utilisation de la période active:`, { year: activePeriod.year, semester: activePeriod.semester });
+      }
+    } else {
+      // Sinon, utiliser les filtres fournis
+      whereClause.year = parseInt(year);
+      whereClause.semester = semester;
+      console.log(`  - Utilisation des filtres fournis:`, { year, semester });
+    }
+
     // Récupérer toutes les entrées de temps APPROUVÉES des utilisateurs STAFF uniquement
     const timeEntries = await prisma.timeEntry.findMany({
-      where: {
-        status: "APPROVED",
-        user: {
-          role: "STAFF"
-        }
-      },
+      where: whereClause,
       include: {
         user: {
           select: {
@@ -90,14 +117,45 @@ export async function GET(request: NextRequest) {
       ]
     });
 
+    // Récupérer aussi toutes les périodes disponibles pour l'interface
+    const availablePeriods = await prisma.timePeriod.findMany({
+      orderBy: [
+        { year: 'desc' },
+        { semester: 'desc' }
+      ]
+    });
+
+    // Si des filtres de période sont fournis, vérifier que la période existe
+    if (year && semester) {
+      const periodExists = availablePeriods.some(
+        period => period.year === parseInt(year) && period.semester === semester
+      );
+      
+      if (!periodExists) {
+        return NextResponse.json({
+          success: false,
+          message: `La période ${semester} ${year} n'existe pas dans le système`,
+          data: [],
+          availablePeriods: availablePeriods
+        });
+      }
+    }
+
     // Regrouper par utilisateur STAFF, année et semestre
     const staffTimesheetStats = timeEntries.reduce((acc, entry) => {
       const key = `${entry.userId}-${entry.year}-${entry.semester}`;
 
       if (!acc[key]) {
-        // Récupérer le coût proforma pour l'année de l'entrée
-        const proformaCostForYear = entry.user.proformaCosts.find(pc => pc.year === entry.year);
+        // Récupérer le coût proforma pour la période active (pas l'année de l'entrée)
+        const targetYear = activePeriod?.year || entry.year;
+        const proformaCostForYear = entry.user.proformaCosts.find(pc => pc.year === targetYear);
         const userProformaCost = proformaCostForYear ? proformaCostForYear.cost : 0;
+        
+        console.log(`Debug coût proforma pour ${entry.user.name}:`);
+        console.log(`  - Année cible: ${targetYear}`);
+        console.log(`  - Coûts proforma disponibles:`, entry.user.proformaCosts);
+        console.log(`  - Coût trouvé:`, proformaCostForYear);
+        console.log(`  - Coût final:`, userProformaCost);
 
         acc[key] = {
           userId: entry.userId,
@@ -178,7 +236,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: formattedStaffTimesheet
+      data: formattedStaffTimesheet,
+      availablePeriods: availablePeriods
     });
 
   } catch (error) {

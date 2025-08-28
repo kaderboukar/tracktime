@@ -63,6 +63,18 @@ interface TimeEntryData {
   description?: string;
 }
 
+// Interface pour l'email de signature de feuille de temps
+interface TimesheetSignatureData {
+  userName: string;
+  userEmail: string;
+  year: number;
+  semester: string;
+  totalHours: number;
+  totalCalculatedCost: number;
+  signatureToken: string;
+  pdfBuffer?: ArrayBuffer; // PDF en pièce jointe
+}
+
 // Template HTML pour l'email de bienvenue
 const getWelcomeEmailTemplate = (userData: UserData) => `
 <!DOCTYPE html>

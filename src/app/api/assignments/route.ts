@@ -47,12 +47,18 @@ async function validateAssignment(
 
 export async function GET(req: NextRequest) {
   try {
+    console.log('API /api/assignments: Début de la requête');
     const authResult = await authenticate(req);
-    if (authResult instanceof NextResponse) return authResult;
+    if (authResult instanceof NextResponse) {
+      console.log('API /api/assignments: Erreur d\'authentification');
+      return authResult;
+    }
 
     const { userId } = authResult;
+    console.log('API /api/assignments: Utilisateur authentifié, userId:', userId);
 
     // Récupérer uniquement les assignations de l'utilisateur connecté
+    console.log('API /api/assignments: Recherche des assignations pour userId:', userId);
     const assignments = await prisma.userProject.findMany({
       where: {
         userId: userId
@@ -74,6 +80,7 @@ export async function GET(req: NextRequest) {
         },
       },
     });
+    console.log('API /api/assignments: Assignations trouvées:', assignments.length);
 
     // Formater les données pour correspondre au type ProjectAssignment
     const formattedAssignments = assignments.map(assignment => ({
@@ -81,6 +88,7 @@ export async function GET(req: NextRequest) {
       project: assignment.project,
       assignmentType: "SECONDARY" as const, // Par défaut SECONDARY
       allocationPercentage: assignment.allocationPercentage,
+      userId: assignment.userId, // Ajouter l'userId
     }));
 
     return NextResponse.json({

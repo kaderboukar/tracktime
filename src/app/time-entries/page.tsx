@@ -119,8 +119,8 @@ export default function TimeEntriesPage() {
     projectId: 0,
     activityId: 0,
     hours: 0,
-    semester: new Date().getMonth() < 6 ? "S1" : "S2" as "S1" | "S2",
-    year: new Date().getFullYear(),
+    semester: activePeriod?.semester || (new Date().getMonth() < 6 ? "S1" : "S2") as "S1" | "S2",
+    year: activePeriod?.year || new Date().getFullYear(),
   });
 
   // États essentiels
@@ -138,6 +138,8 @@ export default function TimeEntriesPage() {
   const [isGenerateTimesheetModalOpen, setIsGenerateTimesheetModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [selectedUserForTimesheet, setSelectedUserForTimesheet] = useState<{ id: number; name: string } | null>(null);
+  const [activePeriod, setActivePeriod] = useState<{ year: number; semester: "S1" | "S2" } | null>(null);
+  const [availablePeriods, setAvailablePeriods] = useState<Array<{ year: number; semester: "S1" | "S2"; isActive: boolean }>>([]);
   const router = useRouter();
   const [remainingHours, setRemainingHours] = useState<number>(480);
   const [currentYear] = useState(new Date().getFullYear());
@@ -624,6 +626,12 @@ export default function TimeEntriesPage() {
       return;
     }
 
+    // Vérifier que la période active est chargée
+    if (!activePeriod) {
+      showNotification("Période active non disponible. Veuillez réessayer.", 'error');
+      return;
+    }
+
     try {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -663,8 +671,8 @@ export default function TimeEntriesPage() {
         projectId: timeEntry.projectId,
         activityId: timeEntry.activityId,
         hours: timeEntry.hours,
-        semester: timeEntry.semester,
-        year: timeEntry.year,
+        semester: activePeriod?.semester || timeEntry.semester,
+        year: activePeriod?.year || timeEntry.year,
         comment: timeEntry.comment
       });
       setEditMode(true);
@@ -743,6 +751,12 @@ export default function TimeEntriesPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const openCreateModal = async () => {
+    // Vérifier que la période active est chargée
+    if (!activePeriod) {
+      showNotification("Période active non disponible. Veuillez réessayer.", 'error');
+      return;
+    }
+
     const token = localStorage.getItem("token");
     try {
       const meResponse = await fetch("/api/auth/me", {
@@ -761,6 +775,8 @@ export default function TimeEntriesPage() {
       setFormData({
         ...initializeFormData(),
         userId,
+        semester: activePeriod?.semester || (new Date().getMonth() < 6 ? "S1" : "S2"),
+        year: activePeriod?.year || new Date().getFullYear(),
       });
       setParentActivity(null);
       setChildActivities([]);
@@ -807,6 +823,46 @@ export default function TimeEntriesPage() {
       fetchExistingYearSemesters(formData.userId);
     }
   }, [formData.userId]);
+
+  // Fonction pour récupérer la période active et toutes les périodes disponibles
+  const fetchActivePeriod = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/time-periods", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          // Trouver la période active
+          const active = result.data.find((period: any) => period.isActive);
+          if (active) {
+            setActivePeriod({
+              year: active.year,
+              semester: active.semester
+            });
+          }
+          
+          // Stocker toutes les périodes disponibles
+          setAvailablePeriods(result.data);
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération des périodes:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchActivePeriod();
+  }, []);
+
+  // Mettre à jour les heures restantes quand la période active change
+  useEffect(() => {
+    if (activePeriod && formData.userId) {
+      fetchRemainingHours(formData.userId, activePeriod.semester, activePeriod.year);
+    }
+  }, [activePeriod, formData.userId]);
 
   // Fonction pour grouper les entrées par utilisateur
   const groupEntriesByUser = (entries: TimeEntry[]): GroupedTimeEntries[] => {
@@ -1353,6 +1409,8 @@ export default function TimeEntriesPage() {
           parentActivity={parentActivity}
           childActivities={childActivities}
           onParentActivityChange={handleParentActivityChange}
+          userRole={userRole}
+          activePeriod={activePeriod}
         />
 
         <ViewTimeEntryModal
@@ -1380,6 +1438,8 @@ export default function TimeEntriesPage() {
           }}
           onGenerate={handleGenerateTimesheet}
           userName={selectedUserForTimesheet?.name || ''}
+          activePeriod={activePeriod}
+          availablePeriods={availablePeriods}
         />
       </div>
     </RoleBasedProtectedRoute>

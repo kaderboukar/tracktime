@@ -78,6 +78,10 @@ export default function NewTimeEntryPage() {
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 3;
 
+  // État pour la période active
+  const [activePeriod, setActivePeriod] = useState<{ year: number; semester: "S1" | "S2" } | null>(null);
+  const [activePeriodLoading, setActivePeriodLoading] = useState(true);
+
   // Effacer les erreurs quand on arrive à l'étape 3
   useEffect(() => {
     if (currentStep === 3) {
@@ -120,9 +124,21 @@ export default function NewTimeEntryPage() {
       setFormData(prev => ({ ...prev, userId: user.id }));
       fetchAvailableProjects(user.id);
       fetchActivities();
-      fetchRemainingHours(user.id);
+      fetchActivePeriod();
     }
   }, [user]);
+
+  // Mettre à jour les heures restantes quand la période active change
+  useEffect(() => {
+    if (user && activePeriod && !activePeriodLoading) {
+      fetchRemainingHours(user.id);
+    }
+  }, [user, activePeriod, activePeriodLoading]);
+
+  // Debug: Log quand activePeriod change
+  useEffect(() => {
+    console.log('activePeriod a changé:', activePeriod);
+  }, [activePeriod]);
 
   useEffect(() => {
     // Filtrer les projets basé sur la recherche
@@ -195,7 +211,12 @@ export default function NewTimeEntryPage() {
   const fetchRemainingHours = async (userId: number) => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`/api/time-entries/remaining?userId=${userId}`, {
+      
+      // Utiliser la période active si disponible, sinon utiliser les valeurs par défaut
+      const currentYear = activePeriod?.year || new Date().getFullYear();
+      const currentSemester = activePeriod?.semester || (new Date().getMonth() < 6 ? "S1" : "S2");
+      
+      const response = await fetch(`/api/time-entries/remaining?userId=${userId}&year=${currentYear}&semester=${currentSemester}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await response.json();
@@ -204,6 +225,46 @@ export default function NewTimeEntryPage() {
       }
     } catch (error) {
       console.error("Erreur lors du calcul des heures restantes:", error);
+    }
+  };
+
+  const fetchActivePeriod = async () => {
+    console.log('fetchActivePeriod appelée');
+    setActivePeriodLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      console.log('Token récupéré:', token ? 'Oui' : 'Non');
+      const response = await fetch("/api/time-periods?activeOnly=true", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          console.log('Période active récupérée:', result.data);
+          setActivePeriod({
+            year: result.data.year,
+            semester: result.data.semester
+          });
+          
+          // Mettre à jour automatiquement le formulaire avec la période active
+          console.log('Mise à jour formData avec:', result.data.year, result.data.semester);
+          setFormData(prev => ({
+            ...prev,
+            year: result.data.year,
+            semester: result.data.semester
+          }));
+        } else {
+          setActivePeriod(null);
+        }
+      } else {
+        setActivePeriod(null);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération de la période active:", error);
+      setActivePeriod(null);
+    } finally {
+      setActivePeriodLoading(false);
     }
   };
 
@@ -236,6 +297,9 @@ export default function NewTimeEntryPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('handleSubmit - activePeriod:', activePeriod);
+    console.log('handleSubmit - formData:', formData);
+    
     // Validation finale avant soumission
     const finalErrors: {[key: string]: string} = {};
 
@@ -263,6 +327,20 @@ export default function NewTimeEntryPage() {
     // Validation de l'année
     if (formData.year < new Date().getFullYear()) {
       finalErrors.year = "Vous ne pouvez pas sélectionner une année antérieure";
+    }
+
+    // Validation de la période active pour STAFF
+    console.log('Validation période - activePeriod:', activePeriod);
+    console.log('Validation période - formData.year:', formData.year, 'formData.semester:', formData.semester);
+    
+    if (!activePeriod) {
+      console.log('Erreur: activePeriod est null');
+      finalErrors.period = "Aucune période de saisie active. Veuillez contacter l'administration.";
+    } else if (formData.year !== activePeriod.year || formData.semester !== activePeriod.semester) {
+      console.log('Erreur: période ne correspond pas');
+      finalErrors.period = `Vous ne pouvez saisir des entrées que pour la période active : ${activePeriod.year} - ${activePeriod.semester}`;
+    } else {
+      console.log('Validation période OK');
     }
 
     // Si il y a des erreurs, les afficher et arrêter (sans toast)
@@ -309,6 +387,54 @@ export default function NewTimeEntryPage() {
           <Navbar />
           <div className="flex items-center justify-center min-h-screen">
             <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          </div>
+        </div>
+      </RoleBasedProtectedRoute>
+    );
+  }
+
+  // Afficher un loader pendant le chargement de la période active
+  if (activePeriodLoading) {
+    return (
+      <RoleBasedProtectedRoute allowedRoles={["STAFF"]}>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+          <Navbar />
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Chargement de la période active...</h3>
+              <p className="text-gray-600">
+                Vérification de la période de saisie en cours.
+              </p>
+            </div>
+          </div>
+        </div>
+      </RoleBasedProtectedRoute>
+    );
+  }
+
+  // Vérifier si une période active existe (seulement après le chargement)
+  if (!activePeriod) {
+    return (
+      <RoleBasedProtectedRoute allowedRoles={["STAFF"]}>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+          <Navbar />
+          <div className="flex items-center justify-center min-h-screen">
+            <div className="text-center">
+              <div className="mx-auto h-24 w-24 text-yellow-500 mb-4">
+                <ExclamationTriangleIcon className="w-full h-full" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Aucune période de saisie active</h3>
+              <p className="text-gray-600 mb-6">
+                Aucune période de saisie n'est actuellement configurée par l'administration.
+              </p>
+              <button
+                onClick={() => router.push("/")}
+                className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors duration-200"
+              >
+                Retour au Dashboard
+              </button>
+            </div>
           </div>
         </div>
       </RoleBasedProtectedRoute>
@@ -389,6 +515,11 @@ export default function NewTimeEntryPage() {
                       <li>Projets assignés exclus de la sélection</li>
                       <li>Toutes les entrées sont soumises à validation</li>
                       <li>Vous ne pouvez pas modifier après soumission</li>
+                      {activePeriod && (
+                        <li className="font-semibold text-blue-600">
+                          Période active : {activePeriod.year} - {activePeriod.semester}
+                        </li>
+                      )}
                     </ul>
                   </div>
 
@@ -444,6 +575,23 @@ export default function NewTimeEntryPage() {
                       </div>
                       <h3 className="text-2xl font-bold text-gray-900 mb-2">Sélection du Projet</h3>
                       <p className="text-gray-600">Choisissez un projet parmi ceux disponibles</p>
+                      
+
+                      
+                      {/* Message informatif sur la période programmée */}
+                      {activePeriod && (
+                        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                          <div className="flex items-center justify-center space-x-2">
+                            <CalendarIcon className="h-5 w-5 text-blue-600" />
+                            <span className="text-blue-800 font-medium">
+                              Période programmée : {activePeriod.year} - {activePeriod.semester}
+                            </span>
+                          </div>
+                          <p className="text-blue-700 text-sm mt-1 text-center">
+                            {activePeriod.semester === 'S1' ? 'Janvier - Juin' : 'Juillet - Décembre'}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <div className="max-w-md mx-auto">
@@ -467,6 +615,8 @@ export default function NewTimeEntryPage() {
                         />
                         <MagnifyingGlassIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                       </div>
+
+
 
                       {showProjectDropdown && filteredProjects.length > 0 && (
                         <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-lg max-h-60 overflow-y-auto">
@@ -496,7 +646,7 @@ export default function NewTimeEntryPage() {
                         </p>
                       )}
 
-                      {formData.projectId && (
+                      {formData.projectId > 0 && (
                         <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl">
                           <div className="flex items-center space-x-3">
                             <CheckCircleIcon className="w-6 h-6 text-green-600" />
@@ -520,6 +670,21 @@ export default function NewTimeEntryPage() {
                       </div>
                       <h3 className="text-2xl font-bold text-gray-900 mb-2">Activité et Détails</h3>
                       <p className="text-gray-600">Sélectionnez l&apos;activité principale et la sous-activité si nécessaire</p>
+                      
+                      {/* Message informatif sur la période programmée */}
+                      {activePeriod && (
+                        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
+                          <div className="flex items-center justify-center space-x-2">
+                            <CalendarIcon className="h-5 w-5 text-blue-600" />
+                            <span className="text-blue-800 font-medium">
+                              Période programmée : {activePeriod.year} - {activePeriod.semester}
+                            </span>
+                          </div>
+                          <p className="text-blue-700 text-sm mt-1 text-center">
+                            {activePeriod.semester === 'S1' ? 'Janvier - Juin' : 'Juillet - Décembre'}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <div className="max-w-md mx-auto space-y-6">
@@ -588,76 +753,124 @@ export default function NewTimeEntryPage() {
                       <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-full mb-4">
                         <CalendarIcon className="w-8 h-8 text-white" />
                       </div>
-                      <h3 className="text-2xl font-bold text-gray-900 mb-2">Période et Heures</h3>
-                      <p className="text-gray-600">Indiquez la période et le nombre d&apos;heures travaillées</p>
+                      <h3 className="text-2xl font-bold text-gray-900 mb-2">Heures Travaillées</h3>
+                      <p className="text-gray-600">Indiquez le nombre d&apos;heures travaillées</p>
                     </div>
 
                     <div className="max-w-2xl mx-auto space-y-6">
-                      <div className="grid md:grid-cols-3 gap-4">
-                        {/* Année */}
-                        <div>
-                          <label htmlFor="year" className="block text-sm font-medium text-gray-700 mb-2">
-                            Année *
-                          </label>
-                          <select
-                            id="year"
-                            value={formData.year}
-                            onChange={(e) => setFormData(prev => ({ ...prev, year: parseInt(e.target.value) }))}
-                            className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 ${
-                              errors.year ? 'border-red-300' : 'border-gray-300'
-                            }`}
-                          >
-                            {Array.from({ length: 3 }, (_, i) => new Date().getFullYear() + i).map(year => (
-                              <option key={year} value={year}>
-                                {year}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
 
-                        {/* Semestre */}
-                        <div>
-                          <label htmlFor="semester" className="block text-sm font-medium text-gray-700 mb-2">
-                            Semestre *
-                          </label>
-                          <select
-                            id="semester"
-                            value={formData.semester}
-                            onChange={(e) => setFormData(prev => ({ ...prev, semester: e.target.value as "S1" | "S2" }))}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
-                          >
-                            <option value="S1">Semestre 1 (Janvier - Juin)</option>
-                            <option value="S2">Semestre 2 (Juillet - Décembre)</option>
-                          </select>
-                        </div>
 
-                        {/* Heures */}
-                        <div>
-                          <label htmlFor="hours" className="block text-sm font-medium text-gray-700 mb-2">
-                            Heures travaillées *
-                          </label>
-                          <input
-                            type="number"
-                            id="hours"
-                            min="0"
-                            max={remainingHours}
-                            step="0.5"
-                            value={formData.hours === 0 ? "" : formData.hours}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              setFormData(prev => ({ 
-                                ...prev, 
-                                hours: value === "" ? 0 : parseFloat(value) || 0 
-                              }));
-                            }}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
-                            placeholder="Saisissez le nombre d'heures"
-                          />
-                          <p className="mt-1 text-xs text-gray-500">
-                            Maximum {remainingHours}h restantes ce semestre
-                          </p>
+                      {activePeriod ? (
+                        // Affichage simplifié quand il y a une période active
+                        <div className="max-w-md mx-auto space-y-6">
+                          {/* Message informatif sur la période */}
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <div className="flex items-center justify-center space-x-2">
+                              <CalendarIcon className="h-5 w-5 text-blue-600" />
+                              <span className="text-blue-800 font-medium">
+                                Période programmée : {activePeriod.year} - {activePeriod.semester}
+                              </span>
+                            </div>
+                            <p className="text-blue-700 text-sm mt-1 text-center">
+                              {activePeriod.semester === 'S1' ? 'Janvier - Juin' : 'Juillet - Décembre'}
+                            </p>
+                          </div>
+
+                          {/* Heures seulement */}
+                          <div>
+                            <label htmlFor="hours" className="block text-sm font-medium text-gray-700 mb-2">
+                              Heures travaillées *
+                            </label>
+                            <input
+                              type="number"
+                              id="hours"
+                              min="0"
+                              max={remainingHours}
+                              step="0.5"
+                              value={formData.hours === 0 ? "" : formData.hours}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setFormData(prev => ({ 
+                                  ...prev, 
+                                  hours: value === "" ? 0 : parseFloat(value) || 0 
+                                }));
+                              }}
+                              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                              placeholder="Saisissez le nombre d'heures"
+                            />
+                            <p className="mt-1 text-xs text-gray-500">
+                              Maximum {remainingHours}h restantes ce semestre
+                            </p>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        // Affichage complet quand il n'y a pas de période active
+                        <div className="grid md:grid-cols-3 gap-4">
+                          {/* Année */}
+                          <div>
+                            <label htmlFor="year" className="block text-sm font-medium text-gray-700 mb-2">
+                              Année *
+                            </label>
+                            <select
+                              id="year"
+                              value={formData.year}
+                              onChange={(e) => setFormData(prev => ({ ...prev, year: parseInt(e.target.value) }))}
+                              className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200 ${
+                                errors.year ? 'border-red-300' : 'border-gray-300'
+                              }`}
+                            >
+                              {Array.from({ length: 3 }, (_, i) => new Date().getFullYear() + i).map(year => (
+                                <option key={year} value={year}>
+                                  {year}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Semestre */}
+                          <div>
+                            <label htmlFor="semester" className="block text-sm font-medium text-gray-700 mb-2">
+                              Semestre *
+                            </label>
+                            <select
+                              id="semester"
+                              value={formData.semester}
+                              onChange={(e) => setFormData(prev => ({ ...prev, semester: e.target.value as "S1" | "S2" }))}
+                              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                            >
+                              <option value="S1">Semestre 1 (Janvier - Juin)</option>
+                              <option value="S2">Semestre 2 (Juillet - Décembre)</option>
+                            </select>
+                          </div>
+
+                          {/* Heures */}
+                          <div>
+                            <label htmlFor="hours" className="block text-sm font-medium text-gray-700 mb-2">
+                              Heures travaillées *
+                            </label>
+                            <input
+                              type="number"
+                              id="hours"
+                              min="0"
+                              max={remainingHours}
+                              step="0.5"
+                              value={formData.hours === 0 ? "" : formData.hours}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setFormData(prev => ({ 
+                                  ...prev, 
+                                  hours: value === "" ? 0 : parseFloat(value) || 0 
+                                }));
+                              }}
+                              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+                              placeholder="Saisissez le nombre d'heures"
+                            />
+                            <p className="mt-1 text-xs text-gray-500">
+                              Maximum {remainingHours}h restantes ce semestre
+                            </p>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Commentaire */}
                       <div>
@@ -674,7 +887,17 @@ export default function NewTimeEntryPage() {
                         />
                       </div>
 
-                                            {/* Les erreurs ne s'affichent que lors de la soumission finale */}
+                                            {/* Affichage des erreurs */}
+                      {errors.period && (
+                        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+                          <div className="flex items-center space-x-2">
+                            <ExclamationTriangleIcon className="h-5 w-5 text-red-600" />
+                            <span className="text-red-800 font-medium">{errors.period}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Les erreurs ne s'affichent que lors de la soumission finale */}
                     </div>
                   </div>
                 )}

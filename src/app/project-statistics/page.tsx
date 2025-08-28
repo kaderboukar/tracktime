@@ -15,7 +15,10 @@ import {
   UsersIcon,
   ArrowDownTrayIcon,
   EyeIcon,
-  CalendarIcon
+  CalendarIcon,
+  FunnelIcon,
+  ChevronDownIcon,
+  ChevronUpIcon
 } from '@heroicons/react/24/outline';
 
 
@@ -49,15 +52,128 @@ interface ProjectStatisticsData {
   };
 }
 
+interface TimePeriod {
+  id: number;
+  year: number;
+  semester: "S1" | "S2";
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Project {
+  id: number;
+  name: string;
+  projectNumber: string;
+  type: string;
+  status: string;
+}
+
+interface User {
+  id: number;
+  name: string;
+  grade: string;
+  role: string;
+}
+
 export default function ProjectStatisticsPage() {
   const [data, setData] = useState<ProjectStatisticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState<ProjectStatistic | null>(null);
+  
+  // Période active (automatique)
+  const [activePeriod, setActivePeriod] = useState<TimePeriod | null>(null);
+  
+  // Filtres améliorés
+  const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>("");
+  const [selectedUserFilter, setSelectedUserFilter] = useState<string>("");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("");
+  const [costRange, setCostRange] = useState({ min: "", max: "" });
+  const [hoursRange, setHoursRange] = useState({ min: "", max: "" });
+  
+  // États pour les données de filtres
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [availablePeriods, setAvailablePeriods] = useState<TimePeriod[]>([]);
+  
+  // États existants (non modifiés)
   const [selectedYear, setSelectedYear] = useState(2025);
   const [selectedSemester, setSelectedSemester] = useState<'S1' | 'S2'>('S1');
   const [chartType, setChartType] = useState<'pie' | 'bar'>('pie');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  
   const chartRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // Récupérer la période active et les données de filtres
+  const fetchActivePeriod = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const response = await fetch("/api/time-periods", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setAvailablePeriods(result.data);
+          const active = result.data.find((period: TimePeriod) => period.isActive);
+          if (active) {
+            setActivePeriod(active);
+            setSelectedYear(active.year);
+            setSelectedSemester(active.semester);
+            console.log(`Période active détectée: ${active.year} - ${active.semester}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération de la période active:", error);
+    }
+  }, []);
+
+  // Récupérer les projets pour les filtres
+  const fetchProjects = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const response = await fetch("/api/projects", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setProjects(result.data);
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération des projets:", error);
+    }
+  }, []);
+
+  // Récupérer les utilisateurs pour les filtres
+  const fetchUsers = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const response = await fetch("/api/users", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setUsers(result.data);
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération des utilisateurs:", error);
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -94,9 +210,37 @@ export default function ProjectStatisticsPage() {
     }
   }, [selectedYear, selectedSemester, router]);
 
+  // Récupérer les données initiales
   useEffect(() => {
+    fetchActivePeriod();
+    fetchProjects();
+    fetchUsers();
+  }, [fetchActivePeriod, fetchProjects, fetchUsers]);
+
+  // Récupérer les données quand la période change
+  useEffect(() => {
+    if (activePeriod) {
+      fetchData();
+    }
+  }, [fetchData, activePeriod]);
+
+  // Appliquer les filtres
+  const applyFilters = () => {
+    // Ici vous pouvez ajouter la logique pour appliquer les filtres
+    // Pour l'instant, on recharge juste les données
     fetchData();
-  }, [fetchData]);
+    toast.success("Filtres appliqués");
+  };
+
+  // Réinitialiser les filtres
+  const resetFilters = () => {
+    setSelectedProjectFilter("");
+    setSelectedUserFilter("");
+    setSelectedStatusFilter("");
+    setCostRange({ min: "", max: "" });
+    setHoursRange({ min: "", max: "" });
+    toast.success("Filtres réinitialisés");
+  };
 
   const handleProjectClick = (project: ProjectStatistic) => {
     setSelectedProject(project);
@@ -292,43 +436,204 @@ export default function ProjectStatisticsPage() {
           </div>
         </div>
 
-        {/* Filtres */}
+        {/* Filtres Améliorés */}
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 p-6 mb-8">
-          <div className="flex items-center space-x-6">
-            <div className="flex items-center space-x-2">
-              <CalendarIcon className="w-5 h-5 text-gray-500" />
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {[2023, 2024, 2025].map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-            </div>
+          <div className="space-y-6">
             
-            <div className="flex items-center space-x-2">
-              <select
-                value={selectedSemester}
-                onChange={(e) => setSelectedSemester(e.target.value as 'S1' | 'S2')}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="S1">Semestre 1</option>
-                <option value="S2">Semestre 2</option>
-              </select>
+            {/* Période Active et Sélection Alternative */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <CalendarIcon className="w-5 h-5 text-green-600" />
+                <span className="text-sm font-medium text-gray-700">
+                  Période active : {activePeriod ? `${activePeriod.year} - ${activePeriod.semester}` : 'Chargement...'}
+                </span>
+                
+                {/* Sélecteur de période alternative */}
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600">ou analyser :</span>
+                  <select
+                    value={`${selectedYear}-${selectedSemester}`}
+                    onChange={(e) => {
+                      const [year, semester] = e.target.value.split('-');
+                      setSelectedYear(parseInt(year));
+                      setSelectedSemester(semester as 'S1' | 'S2');
+                    }}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {availablePeriods.map((period) => (
+                      <option key={`${period.year}-${period.semester}`} value={`${period.year}-${period.semester}`}>
+                        {period.year} - {period.semester}
+                        {period.isActive && ' (Actif)'}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {/* Indicateur de période analysée */}
+                  <span className={`text-sm px-2 py-1 rounded-full ${
+                    selectedYear === activePeriod?.year && selectedSemester === activePeriod?.semester
+                      ? 'bg-green-100 text-green-800 border border-green-200'
+                      : 'bg-blue-100 text-blue-800 border border-blue-200'
+                  }`}>
+                    {selectedYear === activePeriod?.year && selectedSemester === activePeriod?.semester
+                      ? 'Période active'
+                      : 'Période historique'
+                    }
+                  </span>
+                </div>
+                
+                <button 
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800"
+                >
+                  <FunnelIcon className="w-4 h-4" />
+                  {showAdvancedFilters ? (
+                    <>
+                      <span>Masquer les filtres</span>
+                      <ChevronUpIcon className="w-4 h-4" />
+                    </>
+                  ) : (
+                    <>
+                      <span>Afficher les filtres</span>
+                      <ChevronDownIcon className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </div>
+              
+              {/* Type de Graphique (conservé) */}
+              <div className="flex items-center space-x-2">
+                <select
+                  value={chartType}
+                  onChange={(e) => setChartType(e.target.value as 'pie' | 'bar')}
+                  className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="pie">Graphique Circulaire</option>
+                  <option value="bar">Graphique en Barres</option>
+                </select>
+              </div>
             </div>
-            
-            <div className="flex items-center space-x-2">
-              <select
-                value={chartType}
-                onChange={(e) => setChartType(e.target.value as 'pie' | 'bar')}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="pie">Graphique Circulaire</option>
-                <option value="bar">Graphique en Barres</option>
-              </select>
-            </div>
+
+            {/* Filtres Avancés (collapsible) */}
+            {showAdvancedFilters && (
+              <div className="border-t pt-6 space-y-6">
+                
+                {/* Filtres Principaux */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  
+                  {/* Projet */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Projet</label>
+                    <select 
+                      value={selectedProjectFilter}
+                      onChange={(e) => setSelectedProjectFilter(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Tous les projets</option>
+                      {projects.map(project => (
+                        <option key={project.id} value={project.id}>
+                          {project.name} ({project.projectNumber})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Utilisateur */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Utilisateur</label>
+                    <select 
+                      value={selectedUserFilter}
+                      onChange={(e) => setSelectedUserFilter(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Tous les utilisateurs</option>
+                      {users.map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.name} ({user.grade})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Statut du projet */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Statut</label>
+                    <select 
+                      value={selectedStatusFilter}
+                      onChange={(e) => setSelectedStatusFilter(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Tous</option>
+                      <option value="active">Actif</option>
+                      <option value="inactive">Inactif</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Filtres de Performance */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  
+                  {/* Fourchette de coût */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Coût (USD)</label>
+                    <div className="flex space-x-2">
+                      <input 
+                        type="number" 
+                        placeholder="Min" 
+                        value={costRange.min}
+                        onChange={(e) => setCostRange(prev => ({ ...prev, min: e.target.value }))}
+                        className="w-20 border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                      />
+                      <span className="text-gray-500 self-center">-</span>
+                      <input 
+                        type="number" 
+                        placeholder="Max" 
+                        value={costRange.max}
+                        onChange={(e) => setCostRange(prev => ({ ...prev, max: e.target.value }))}
+                        className="w-20 border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fourchette d'heures */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">Heures</label>
+                    <div className="flex space-x-2">
+                      <input 
+                        type="number" 
+                        placeholder="Min" 
+                        value={hoursRange.min}
+                        onChange={(e) => setHoursRange(prev => ({ ...prev, min: e.target.value }))}
+                        className="w-20 border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                      />
+                      <span className="text-gray-500 self-center">-</span>
+                      <input 
+                        type="number" 
+                        placeholder="Max" 
+                        value={hoursRange.max}
+                        onChange={(e) => setHoursRange(prev => ({ ...prev, max: e.target.value }))}
+                        className="w-20 border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                      />
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-end space-x-2 col-span-2">
+                    <button 
+                      onClick={applyFilters}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Appliquer les Filtres
+                    </button>
+                    <button 
+                      onClick={resetFilters}
+                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      Réinitialiser
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

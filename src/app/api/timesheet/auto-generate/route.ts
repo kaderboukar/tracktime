@@ -96,15 +96,51 @@ export async function POST(request: NextRequest) {
       }))
     };
 
+    // Créer un token de signature unique pour ce STAFF
+    const signatureToken = Buffer.from(`${staffUser.id}-${year}-${semester}-${Date.now()}`).toString('base64');
+    
+    // Créer ou mettre à jour l'enregistrement SignedTimesheet
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Expire dans 7 jours
+    
+    await prisma.signedTimesheet.upsert({
+      where: {
+        userId_year_semester: {
+          userId: staffUser.id,
+          year: parseInt(year),
+          semester: semester as "S1" | "S2"
+        }
+      },
+      update: {
+        originalPdfPath: `timesheets/${staffUser.id}_${year}_${semester}.pdf`,
+        signatureToken,
+        expiresAt,
+        signatureStatus: 'PENDING',
+        updatedAt: new Date()
+      },
+      create: {
+        userId: staffUser.id,
+        year: parseInt(year),
+        semester: semester as "S1" | "S2",
+        originalPdfPath: `timesheets/${staffUser.id}_${year}_${semester}.pdf`,
+        signatureToken,
+        expiresAt,
+        signatureStatus: 'PENDING'
+      }
+    });
+    
     // Générer le PDF
     const pdfBuffer = await generateTimesheetPDF(timesheetData);
     
-    // Envoyer l'email avec le PDF en utilisant votre système email existant
-    const { sendTimesheetEmail } = await import('@/lib/email');
-    const emailSent = await sendTimesheetEmail({
+    // Envoyer l'email avec le PDF et le lien de signature
+    const { sendTimesheetSignatureEmail } = await import('@/lib/signature-email');
+    const emailSent = await sendTimesheetSignatureEmail({
       userName: staffUser.name,
+      userEmail: staffUser.email,
       year,
       semester,
+      signatureToken,
+      totalHours,
+      totalCalculatedCost: Math.round(totalCalculatedCost),
       pdfBuffer
     });
 
@@ -158,8 +194,9 @@ async function generateTimesheetPDF(timesheetData: {
     format: 'a4'
   });
 
-  // Logo PNUD
-  doc.addImage("/logoundp.png", "PNG", 250, 18, 25, 35);
+  // Logo PNUD - Temporairement désactivé pour éviter l'erreur PNG
+  // TODO: Convertir le logo en base64 et l'ajouter ici
+  // doc.addImage(logoBase64, "PNG", 250, 18, 25, 35);
 
   // En-tête
   doc.setFontSize(20);

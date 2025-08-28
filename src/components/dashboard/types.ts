@@ -4,6 +4,7 @@ export type ProjectAssignment = {
   project: { name: string; projectNumber: string };
   assignmentType: "SECONDARY" | "REMUNERATED";
   allocationPercentage: number | null;
+  userId: number;
 };
 
 export type TimeEntry = {

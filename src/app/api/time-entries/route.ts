@@ -187,6 +187,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Vérifier la période active pour les utilisateurs STAFF
+    if (role === "STAFF") {
+      const activePeriod = await prisma.timePeriod.findFirst({
+        where: { isActive: true }
+      });
+
+      if (!activePeriod) {
+        return NextResponse.json(
+          { success: false, message: "Aucune période de saisie active. Veuillez contacter l'administration." },
+          { status: 400 }
+        );
+      }
+
+      // Vérifier que l'année et le semestre correspondent à la période active
+      if (data.year !== activePeriod.year || data.semester !== activePeriod.semester) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            message: `Vous ne pouvez saisir des entrées que pour la période active : ${activePeriod.year} - ${activePeriod.semester}` 
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Vérifier les heures du semestre
     const { totalHours, remainingHours } = await checkSemesterHours(
       data.userId,
@@ -206,6 +231,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Récupérer la période active pour l'associer à l'entrée
+    const activePeriod = await prisma.timePeriod.findFirst({
+      where: { isActive: true }
+    });
+
     const timeEntry = await prisma.timeEntry.create({
       data: {
         userId: data.userId,
@@ -215,6 +245,7 @@ export async function POST(request: NextRequest) {
         semester: data.semester,
         year: data.year,
         comment: data.comment || undefined,
+        timePeriodId: activePeriod?.id || null, // Associer à la période active
       },
       include: {
         user: {
@@ -233,6 +264,13 @@ export async function POST(request: NextRequest) {
         activity: {
           select: {
             name: true,
+          },
+        },
+        timePeriod: {
+          select: {
+            id: true,
+            year: true,
+            semester: true,
           },
         },
       },

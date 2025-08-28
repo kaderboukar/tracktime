@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   ChartBarIcon,
   FunnelIcon,
@@ -33,28 +33,37 @@ interface StaffTimeSheetDetail {
   createdAt: string;
 }
 
-export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetData }) => {
-  // Obtenir les années disponibles depuis les données
-  const availableYears = staffTimesheetData.length > 0
-    ? [...new Set(staffTimesheetData.map(item => item.year))].sort((a, b) => b - a)
-    : [2025, 2024, 2023]; // Années par défaut si pas de données
-  const currentYear = new Date().getFullYear();
+interface TimePeriod {
+  id: number;
+  year: number;
+  semester: "S1" | "S2";
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
-  const [selectedYear, setSelectedYear] = useState(availableYears[0] || currentYear);
-  const [selectedSemester, setSelectedSemester] = useState<"S1" | "S2">(
-    new Date().getMonth() < 6 ? "S1" : "S2"
-  );
+export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetData }) => {
+  // États pour les périodes disponibles
+  const [availablePeriods, setAvailablePeriods] = useState<TimePeriod[]>([]);
+  const [isLoadingPeriods, setIsLoadingPeriods] = useState(true);
+
+  // États pour les données filtrées
+  const [filteredData, setFilteredData] = useState<any[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+
+  // Période active (automatique)
+  const [activePeriod, setActivePeriod] = useState<TimePeriod | null>(null);
+
+  // Utiliser la période active au lieu de la sélection manuelle
+  const selectedYear = activePeriod?.year || new Date().getFullYear();
+  const selectedSemester = activePeriod?.semester || (new Date().getMonth() < 6 ? "S1" : "S2");
+  
   const [detailedData, setDetailedData] = useState<StaffTimeSheetDetail[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
   // États pour la pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-
-  // Filtrer les données selon la période sélectionnée
-  const filteredData = staffTimesheetData.filter(
-    item => item.year === selectedYear && item.semester === selectedSemester
-  );
 
   // Pagination des données
   const totalItems = filteredData.length;
@@ -63,7 +72,80 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
   const endIndex = startIndex + itemsPerPage;
   const paginatedData = filteredData.slice(startIndex, endIndex);
 
-  // Réinitialiser la page quand les filtres changent
+  // Fonction pour récupérer les périodes disponibles
+  const fetchAvailablePeriods = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/time-periods", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setAvailablePeriods(result.data);
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération des périodes:", error);
+    } finally {
+      setIsLoadingPeriods(false);
+    }
+  }, []);
+
+  // Fonction pour récupérer les données filtrées par période
+  const fetchFilteredData = useCallback(async () => {
+    if (!activePeriod) return; // Ne pas appeler si pas de période active
+    
+    setIsLoadingData(true);
+    try {
+      const token = localStorage.getItem("token");
+      // Utiliser la période active automatiquement (pas de paramètres)
+      const response = await fetch(`/api/admin/staff-timesheet`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setFilteredData(result.data);
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération des données filtrées:", error);
+    } finally {
+      setIsLoadingData(false);
+    }
+  }, [activePeriod]);
+
+  // Récupérer les périodes disponibles au chargement du composant
+  useEffect(() => {
+    fetchAvailablePeriods();
+  }, [fetchAvailablePeriods]);
+
+  // Mettre à jour la période active quand les périodes changent (une seule fois)
+  useEffect(() => {
+    if (availablePeriods.length > 0 && !activePeriod) {
+      const active = availablePeriods.find(period => period.isActive);
+      if (active) {
+        setActivePeriod(active);
+        console.log(`Période active détectée: ${active.year} - ${active.semester}`);
+      }
+    }
+  }, [availablePeriods, activePeriod]);
+
+  // Récupérer les données filtrées quand la période active change (une seule fois)
+  useEffect(() => {
+    if (activePeriod) {
+      fetchFilteredData();
+    }
+  }, [activePeriod, fetchFilteredData]);
+
+  // Réinitialiser la page quand la période change
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedYear, selectedSemester]);
@@ -100,58 +182,31 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
       console.log('Année sélectionnée:', selectedYear);
       console.log('Semestre sélectionné:', selectedSemester);
 
-      // Toujours récupérer les données fraîches pour l'export
-      setIsLoadingDetails(true);
-
-      const token = localStorage.getItem("token");
-      const response = await fetch("/api/admin/staff-timesheet-details", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erreur API: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('Données reçues de l\'API:', result);
-
-      if (!result.success || !result.data) {
-        throw new Error('Aucune donnée reçue de l\'API');
-      }
-
-      const allDetailedData = result.data;
-      console.log('Nombre total d\'entrées:', allDetailedData.length);
-
-      // Filtrer les données détaillées selon la période sélectionnée
-      const filteredDetailedData = allDetailedData.filter(
-        (item: any) => item.year === selectedYear && item.semester === selectedSemester
-      );
-
-      console.log('Données filtrées:', filteredDetailedData.length);
-      console.log('Exemple de données filtrées:', filteredDetailedData.slice(0, 2));
-
-      if (filteredDetailedData.length === 0) {
+      // Vérifier qu'il y a des données pour la période sélectionnée
+      if (filteredData.length === 0) {
         alert(`Aucune donnée trouvée pour ${selectedSemester} ${selectedYear}. Vérifiez qu'il y a des entrées de temps approuvées pour cette période.`);
         return;
       }
 
-      // Import dynamique de XLSX
-      const XLSX = await import('xlsx');
-
-      // Préparer les données pour l'export selon le format demandé
-      const exportData = filteredDetailedData.map((item: any, index: number) => ({
+      // Utiliser les données filtrées déjà chargées pour l'export
+      // Note: Pour l'export Excel, nous utilisons les données déjà filtrées par période
+      // Si vous avez besoin des données détaillées complètes, vous pouvez les récupérer ici
+      
+      // Pour l'instant, utilisons les données filtrées disponibles
+      const exportData = filteredData.map((item: any, index: number) => ({
         'N°': index + 1,
-        'Staff': item.staff,
-        'Projet': item.project,
-        'Activité & sous-activité': item.activity,
+        'Staff': item.userName,
+        'Projet': item.projects.join(', '),
+        'Activité & sous-activité': item.activities.join(', '),
         'Année': item.year,
         'Semestre': item.semester,
-        'Heures': item.hours,
+        'Heures': item.totalHours,
         'Coût Proforma (USD)': Math.round(item.userProformaCost),
-        'Coût Calculé (USD)': Math.round(item.entryCalculatedCost)
+        'Coût Calculé (USD)': Math.round(item.totalCalculatedCost)
       }));
+
+      // Import dynamique de XLSX
+      const XLSX = await import('xlsx');
 
       console.log('Données d\'export préparées:', exportData.length);
 
@@ -412,37 +467,13 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
           </h2>
         </div>
 
-        {/* Filtres et bouton d'export */}
+        {/* Affichage de la période active et bouton d'export */}
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <FunnelIcon className="w-5 h-5 text-gray-400" />
-            <select
-              title="Sélectionner l'année"
-              value={selectedYear}
-              onChange={(e) => {
-                const year = parseInt(e.target.value);
-                setSelectedYear(year);
-              }}
-              className="text-sm border-gray-200 rounded-lg focus:ring-green-500 focus:border-green-500"
-            >
-              {availableYears.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-            <select
-              title="Sélectionner le semestre"
-              value={selectedSemester}
-              onChange={(e) => {
-                const semester = e.target.value as "S1" | "S2";
-                setSelectedSemester(semester);
-              }}
-              className="text-sm border-gray-200 rounded-lg focus:ring-green-500 focus:border-green-500"
-            >
-              <option value="S1">S1</option>
-              <option value="S2">S2</option>
-            </select>
+            <span className="text-sm font-medium text-gray-700">
+              Période active : {activePeriod ? `${activePeriod.year} - ${activePeriod.semester}` : 'Chargement...'}
+            </span>
           </div>
 
           <button
@@ -457,12 +488,39 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
         </div>
       </div>
 
-      {filteredData.length === 0 ? (
+      {isLoadingData ? (
+        <div className="text-center py-8 bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-500">Chargement des données pour {selectedSemester} {selectedYear}...</p>
+        </div>
+      ) : filteredData.length === 0 ? (
         <div className="text-center py-8 bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50">
           <p className="text-gray-500">Aucune donnée STAFF disponible pour cette période</p>
           <p className="text-sm text-gray-400 mt-2">
             Année: {selectedYear}, Semestre: {selectedSemester}
           </p>
+          {availablePeriods.length > 0 && (
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-700 font-medium mb-2">Périodes disponibles dans le système :</p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {availablePeriods.map((period) => (
+                  <span
+                    key={`${period.year}-${period.semester}`}
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                      period.isActive
+                        ? 'bg-green-100 text-green-800 border border-green-200'
+                        : 'bg-gray-100 text-gray-600 border border-gray-200'
+                    }`}
+                  >
+                    {period.year} - {period.semester}
+                    {period.isActive && (
+                      <span className="ml-1 text-green-600">●</span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <>

@@ -12,10 +12,11 @@ import { WorkedHours } from "@/components/dashboard/WorkedHours";
 // import { PersonalProgress } from "@/components/dashboard/PersonalProgress";
 import { PersonalTimeEntries } from "@/components/dashboard/PersonalTimeEntries";
 //import { AdminStats } from "@/components/dashboard/AdminStats";
-import { PlusIcon, ChartBarIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, ChartBarIcon, CalendarIcon, CheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { ProjectsStats } from "@/components/dashboard/ProjectsStats";
 import { StaffTimeSheet } from "@/components/dashboard/StaffTimeSheet";
 import { TimeEntry, ProjectAssignment } from "@/components/dashboard/types";
+import TimePeriodModal from "@/components/TimePeriodModal";
 
 
 
@@ -81,25 +82,63 @@ export default function DashboardPage() {
   const [projects, setProjects] = useState<ProjectAssignment[]>([]); // Projets assignés pour l'affichage
   // const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [totalSecondaryHours, setTotalSecondaryHours] = useState<number>(0);
+
+  // Fonction pour calculer les heures en fonction de la période active
+  const fetchHoursForPeriod = async (year: number, semester: string) => {
+    const token = localStorage.getItem("token");
+    if (!token || !user) return;
+
+    try {
+      const timeEntriesResponse = await fetch(
+        `/api/time-entries?year=${year}&semester=${semester}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const timeEntriesData = await timeEntriesResponse.json();
+      
+      if (timeEntriesData.success) {
+        const totalHours = timeEntriesData.data.reduce(
+          (sum: number, te: TimeEntry) => sum + te.hours,
+          0
+        );
+        setTotalSecondaryHours(totalHours);
+      } else {
+        setTotalSecondaryHours(0);
+      }
+    } catch (error) {
+      console.error("Erreur lors du calcul des heures pour la période:", error);
+      setTotalSecondaryHours(0);
+    }
+  };
   const [staffTimeSheetData, setStaffTimeSheetData] = useState<StaffTimesheetData[]>([]);
   const [projectStatsData, setProjectStatsData] = useState<ProjectStatsData[]>([]);
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
+  const [activePeriod, setActivePeriod] = useState<{ year: number; semester: "S1" | "S2" } | null>(null);
+  const [isTimePeriodModalOpen, setIsTimePeriodModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const router = useRouter();
 
   useEffect(() => {
     fetchData();
+    fetchActivePeriod();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Mettre à jour les heures quand la période active change
+  useEffect(() => {
+    if (activePeriod && user?.role === "STAFF") {
+      fetchHoursForPeriod(activePeriod.year, activePeriod.semester);
+    }
+  }, [activePeriod, user]);
+
   useEffect(() => {
     if (user) {
-      if (user.role === "STAFF") {
-        fetchAvailableProjects(user.id); // Charger les projets disponibles pour STAFF
-      } else if (user.role === "ADMIN" || user.role === "PMSU") {
+      if (user.role === "ADMIN" || user.role === "PMSU") {
         fetchAdminData(); // Charger les données administratives
       }
+      // Note: Les projets assignés pour STAFF sont chargés dans fetchData()
     }
   }, [user]);
 
@@ -180,6 +219,40 @@ export default function DashboardPage() {
 
 
 
+  const fetchActivePeriod = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const response = await fetch("/api/time-periods?activeOnly=true", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          const newPeriod = {
+            year: result.data.year,
+            semester: result.data.semester
+          };
+          setActivePeriod(newPeriod);
+          
+          // Mettre à jour les heures pour la nouvelle période
+          if (user?.role === "STAFF") {
+            fetchHoursForPeriod(newPeriod.year, newPeriod.semester);
+          }
+        } else {
+          setActivePeriod(null);
+        }
+      } else {
+        setActivePeriod(null);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération de la période active:", error);
+      setActivePeriod(null);
+    }
+  };
+
   const fetchData = async () => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -204,7 +277,7 @@ export default function DashboardPage() {
 
       // Récupérer les projets assignés
       try {
-        const assignmentsRes = await fetch("/api/assignments", {
+        const assignmentsRes = await fetch("/api/staff/assigned-projects", {
           headers: { Authorization: `Bearer ${token}` },
         });
         const assignmentsResponse = await assignmentsRes.json();
@@ -215,40 +288,14 @@ export default function DashboardPage() {
         ) {
           setProjects(assignmentsResponse.data);
         } else {
-          console.error(
-            "Erreur assignments:",
-            assignmentsResponse.message || "Format de réponse invalide"
-          );
-          setProjects([]); // Définir un tableau vide en cas d'erreur
+          setProjects([]);
         }
       } catch (error) {
         console.error("Erreur lors du chargement des projets assignés:", error);
         setProjects([]);
       }
 
-      // Récupérer les entrées de temps pour le semestre actuel
-      const now = new Date();
-      const currentSemester = now.getMonth() < 6 ? "S1" : "S2";
-      const currentYear = now.getFullYear();
-
-      const timeEntriesResponse = await fetch(
-        `/api/time-entries?year=${currentYear}&semester=${currentSemester}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const timeEntriesData = await timeEntriesResponse.json();
-      
-      if (timeEntriesData.success) {
-        // Calculer les heures totales pour le semestre actuel uniquement
-        const totalHours = timeEntriesData.data.reduce(
-          (sum: number, te: TimeEntry) => sum + te.hours,
-          0
-        );
-        setTotalSecondaryHours(totalHours);
-      } else {
-        setTotalSecondaryHours(0);
-      }
+      // Les heures seront calculées après le chargement de la période active
 
       // Supprimer ou commenter la partie qui utilise /api/time-entries
       // const timeEntriesRes = await fetch("/api/time-entries?include=user"...
@@ -437,6 +484,110 @@ export default function DashboardPage() {
                 </div>
               )}
 
+            {/* Section Générer Feuille de Temps pour ADMIN et PMSU */}
+            {(user?.role === "ADMIN" || user?.role === "PMSU") && (
+              <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/50 mb-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl">
+                      <span className="text-2xl">📋</span>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">
+                        Générer Feuille de Temps
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Exportez les feuilles de temps pour analyse et reporting
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Export Feuille de Temps STAFF */}
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-4 hover:shadow-md transition-all duration-200">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="p-2 bg-green-500 rounded-lg">
+                        <span className="text-white text-lg">👥</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-green-800">Feuille STAFF</h4>
+                        <p className="text-xs text-green-600">Export Excel/PDF</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-green-700 mb-3">
+                      Feuille de temps détaillée pour tous les utilisateurs STAFF avec calculs de coûts
+                    </p>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => {
+                          // Rediriger vers la page de génération des feuilles de temps
+                          window.location.href = '/generate-timesheet';
+                        }}
+                        className="flex-1 bg-green-600 text-white text-sm px-3 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        Générer
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Export Statistiques par Projet */}
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 hover:shadow-md transition-all duration-200">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="p-2 bg-blue-500 rounded-lg">
+                        <span className="text-white text-lg">📊</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-blue-800">Stats Projets</h4>
+                        <p className="text-xs text-blue-600">Export Excel/PDF</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-blue-700 mb-3">
+                      Statistiques détaillées par projet avec analyses de coûts et performances
+                    </p>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => {
+                          // Rediriger vers la page de génération des feuilles de temps
+                          window.location.href = '/generate-timesheet';
+                        }}
+                        className="flex-1 bg-blue-600 text-white text-sm px-3 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Générer
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Export Feuille de Temps Globale */}
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-4 hover:shadow-md transition-all duration-200">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="p-2 bg-purple-500 rounded-lg">
+                        <span className="text-white text-lg">🌍</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-purple-800">Feuille Globale</h4>
+                        <p className="text-xs text-purple-600">Export Excel/PDF</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-purple-700 mb-3">
+                      Feuille de temps globale pour tous les utilisateurs avec analyses complètes
+                    </p>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => {
+                          // Rediriger vers la page de génération des feuilles de temps
+                          window.location.href = '/generate-timesheet';
+                        }}
+                        className="flex-1 bg-purple-600 text-white text-sm px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+                      >
+                        Générer
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Statistiques personnelles pour STAFF */}
             {user?.role === "STAFF" && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
@@ -495,18 +646,19 @@ export default function DashboardPage() {
             {/* Grille principale - Uniquement pour STAFF */}
             {user?.role === "STAFF" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
                 <div
                   className="bg-white/70 backdrop-blur-xl p-3 rounded-lg shadow-sm border border-white/50
                               hover:shadow-md transition-all duration-200"
                 >
-                  <AssignedProjects projects={projects} />
+                  <AssignedProjects projects={projects} activePeriod={activePeriod} />
                 </div>
 
                 <div
                   className="bg-white/70 backdrop-blur-xl p-3 rounded-lg shadow-sm border border-white/50
                               hover:shadow-md transition-all duration-200"
                 >
-                  <WorkedHours totalHours={totalSecondaryHours} />
+                  <WorkedHours totalHours={totalSecondaryHours} activePeriod={activePeriod} />
                 </div>
               </div>
             )}
@@ -514,6 +666,67 @@ export default function DashboardPage() {
             {/* Composants administratifs pour ADMIN et PMSU */}
             {(user?.role === "ADMIN" || user?.role === "PMSU") && (
               <>
+                <div
+                  className="group bg-white/70 backdrop-blur-xl p-6 rounded-2xl shadow-lg border border-white/50
+                            hover:shadow-xl transition-all duration-300"
+                >
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Gestion des Périodes de Saisie</h3>
+                    <button
+                      onClick={() => setIsTimePeriodModalOpen(true)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center"
+                    >
+                      <CalendarIcon className="h-4 w-4 mr-2" />
+                      Gérer les Périodes
+                    </button>
+                  </div>
+                  
+                  {activePeriod ? (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <CheckIcon className="h-5 w-5 text-green-600 mr-2" />
+                          <div>
+                            <p className="text-sm text-green-800">
+                              Période active : <span className="font-semibold">{activePeriod.year} - {activePeriod.semester}</span>
+                            </p>
+                            <p className="text-xs text-green-600">
+                              Les utilisateurs STAFF peuvent saisir leurs heures
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-green-600">
+                            {activePeriod.semester === 'S1' ? 'Janvier - Juin' : 'Juillet - Décembre'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <div className="flex items-center">
+                        <XMarkIcon className="h-5 w-5 text-yellow-600 mr-2" />
+                        <div>
+                          <p className="text-sm text-yellow-800">
+                            Aucune période active
+                          </p>
+                          <p className="text-xs text-yellow-600">
+                            Créez une période active pour permettre la saisie
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Modal pour la gestion des périodes */}
+                <TimePeriodModal
+                  isOpen={isTimePeriodModalOpen}
+                  onClose={() => setIsTimePeriodModalOpen(false)}
+                  userRole={user?.role || 'STAFF'}
+                  onPeriodChange={fetchActivePeriod}
+                />
+
                 <div
                   className="group bg-white/70 backdrop-blur-xl p-6 rounded-2xl shadow-lg border border-white/50
                             hover:shadow-xl transition-all duration-300"

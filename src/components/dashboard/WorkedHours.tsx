@@ -2,16 +2,18 @@ import { ClockIcon } from "@heroicons/react/24/outline";
 
 type WorkedHoursProps = {
   totalHours: number;
+  activePeriod?: { year: number; semester: "S1" | "S2" } | null;
 };
 
-export function WorkedHours({ totalHours }: WorkedHoursProps) {
+export function WorkedHours({ totalHours, activePeriod }: WorkedHoursProps) {
   const maxHours = 480;
   // S'assurer que le pourcentage ne dépasse pas 100% et gérer les cas extrêmes
   const percentage = Math.min(Math.max((totalHours / maxHours) * 100, 0), 100);
   
+  // Utiliser la période active si disponible, sinon utiliser la période actuelle
   const currentDate = new Date();
-  const currentSemester = currentDate.getMonth() < 6 ? 'S1' : 'S2';
-  const currentYear = currentDate.getFullYear();
+  const currentSemester = activePeriod?.semester || (currentDate.getMonth() < 6 ? 'S1' : 'S2');
+  const currentYear = activePeriod?.year || currentDate.getFullYear();
   
   // Formater l'affichage des heures
   const formattedHours = totalHours.toFixed(1);

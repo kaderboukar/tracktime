@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { TimeEntry } from "./types";
 import { ChartBarIcon, FunnelIcon, ArrowDownTrayIcon } from "@heroicons/react/24/outline";
 
@@ -14,11 +14,6 @@ type ProjectStats = {
   entries: TimeEntry[];
 };
 
-type PeriodFilter = {
-  semester: "S1" | "S2";
-  year: number;
-};
-
 interface ProjectStatsData {
   projectId: number;
   projectName: string;
@@ -31,6 +26,15 @@ interface ProjectStatsData {
   activitiesCount: number;
   totalCalculatedCost: number;
   totalProformaCosts: number;
+}
+
+interface TimePeriod {
+  id: number;
+  year: number;
+  semester: "S1" | "S2";
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 type ProjectsStatsProps = {
@@ -53,6 +57,77 @@ export function ProjectsStats({
   // États pour la pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+
+  // Période active (automatique)
+  const [activePeriod, setActivePeriod] = useState<TimePeriod | null>(null);
+
+  // Récupérer la période active
+  const fetchActivePeriod = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/time-periods", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          const active = result.data.find((period: TimePeriod) => period.isActive);
+          if (active) {
+            setActivePeriod(active);
+            console.log(`Période active détectée dans ProjectsStats: ${active.year} - ${active.semester}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération de la période active:", error);
+    }
+  }, []);
+
+  // Récupérer la période active au chargement
+  useEffect(() => {
+    fetchActivePeriod();
+  }, [fetchActivePeriod]);
+
+  // Utiliser la période active au lieu des sélecteurs manuels
+  const filter = {
+    semester: activePeriod?.semester || "S1",
+    year: activePeriod?.year || new Date().getFullYear(),
+  };
+
+  const filteredProjectStats = useMemo(() => {
+
+    // Filtrer par période uniquement
+    const filteredStats = projectStats.filter(
+      (stat) =>
+        stat.semester === filter.semester && stat.year === filter.year
+    );
+
+    // Utiliser les calculs de l'API et calculer les pourcentages
+    const finalStats = filteredStats.map((stat) => ({
+      ...stat,
+      totalPercentage: (stat.totalHours / maxHoursPerSemester) * 100,
+      // Utiliser les calculs de l'API
+      totalCost: stat.totalCalculatedCost || 0,
+      totalProformaCost: stat.totalProformaCosts || 0,
+      entries: [], // Pas d'entrées détaillées dans les nouvelles données
+    }));
+    return finalStats;
+  }, [projectStats, filter, maxHoursPerSemester]);
+
+  // Pagination des données
+  const totalItems = filteredProjectStats.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedData = filteredProjectStats.slice(startIndex, endIndex);
+
+  // Réinitialiser la page quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter]);
 
   // Fonction d'export Excel
   const exportToExcel = async () => {
@@ -103,53 +178,6 @@ export function ProjectsStats({
       alert('Erreur lors de l\'export Excel');
     }
   };
-  // Obtenir la liste des années uniques des statistiques
-  const years = useMemo(() => {
-    const uniqueYears = [...new Set(projectStats.map((stat) => stat.year))];
-    return uniqueYears.sort((a, b) => b - a); // Tri décroissant
-  }, [projectStats]);
-
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth();
-
-  // État pour le filtre
-  const [filter, setFilter] = useState<PeriodFilter>({
-    semester: currentMonth < 6 ? "S1" : "S2",
-    year: currentYear,
-  });
-
-
-  const filteredProjectStats = useMemo(() => {
-
-    // Filtrer par période uniquement
-    const filteredStats = projectStats.filter(
-      (stat) =>
-        stat.semester === filter.semester && stat.year === filter.year
-    );
-
-    // Utiliser les calculs de l'API et calculer les pourcentages
-    const finalStats = filteredStats.map((stat) => ({
-      ...stat,
-      totalPercentage: (stat.totalHours / maxHoursPerSemester) * 100,
-      // Utiliser les calculs de l'API
-      totalCost: stat.totalCalculatedCost || 0,
-      totalProformaCost: stat.totalProformaCosts || 0,
-      entries: [], // Pas d'entrées détaillées dans les nouvelles données
-    }));
-    return finalStats;
-  }, [projectStats, filter, maxHoursPerSemester]);
-
-  // Pagination des données
-  const totalItems = filteredProjectStats.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedData = filteredProjectStats.slice(startIndex, endIndex);
-
-  // Réinitialiser la page quand les filtres changent
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filter]);
 
   return (
     <div className="space-y-6">
@@ -163,36 +191,13 @@ export function ProjectsStats({
           </h2>
         </div>
 
-        {/* Filtres et Export */}
+        {/* Affichage de la période active et Export */}
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <FunnelIcon className="w-5 h-5 text-gray-400" />
-            <select
-              value={filter.year}
-              onChange={(e) =>
-                setFilter((prev) => ({ ...prev, year: Number(e.target.value) }))
-              }
-              className="text-sm border-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            >
-              {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-            <select
-              value={filter.semester}
-              onChange={(e) =>
-                setFilter((prev) => ({
-                  ...prev,
-                  semester: e.target.value as "S1" | "S2",
-                }))
-              }
-              className="text-sm border-gray-200 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="S1">S1</option>
-              <option value="S2">S2</option>
-            </select>
+            <span className="text-sm font-medium text-gray-700">
+              Période active : {activePeriod ? `${activePeriod.year} - ${activePeriod.semester}` : 'Chargement...'}
+            </span>
           </div>
 
           {/* Bouton Export */}

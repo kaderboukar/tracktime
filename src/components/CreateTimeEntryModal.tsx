@@ -7,7 +7,8 @@ import {
   CogIcon,
   ChatBubbleLeftRightIcon,
   CalendarIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  CheckIcon
 } from '@heroicons/react/24/outline';
 
 interface CreateTimeEntryModalProps {
@@ -23,6 +24,8 @@ interface CreateTimeEntryModalProps {
   parentActivity: number | null;
   childActivities: Activity[];
   onParentActivityChange: (activityId: number) => void;
+  userRole: string;
+  activePeriod?: { year: number; semester: "S1" | "S2" } | null;
 }
 
 interface FormData {
@@ -61,7 +64,9 @@ export default function CreateTimeEntryModal({
   editMode,
   parentActivity,
   childActivities,
-  onParentActivityChange
+  onParentActivityChange,
+  userRole,
+  activePeriod
 }: CreateTimeEntryModalProps) {
 
   // Validation des heures
@@ -320,40 +325,67 @@ export default function CreateTimeEntryModal({
                     </div>
 
                     <div className="space-y-4">
+                      {/* Affichage de la période active pour STAFF */}
+                      {userRole === "STAFF" && activePeriod && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                          <div className="flex items-center space-x-2">
+                            <CheckIcon className="h-5 w-5 text-blue-600" />
+                            <span className="text-blue-800 font-medium">
+                              Période active : {activePeriod.year} - {activePeriod.semester}
+                            </span>
+                          </div>
+                          <p className="text-blue-700 text-sm mt-1">
+                            Vous ne pouvez saisir des entrées que pour cette période.
+                          </p>
+                        </div>
+                      )}
+
                       {/* Semestre et Année */}
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label htmlFor="semester" className="block text-sm font-medium text-orange-800 mb-2">
                             Semestre *
                           </label>
-                          <select
-                            id="semester"
-                            name="semester"
-                            value={formData.semester}
-                            onChange={(e) => onChange('semester', e.target.value as "S1" | "S2")}
-                            required
-                            className="block w-full rounded-xl border-orange-200 bg-white/80 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-sm py-3 px-4 transition-all duration-200"
-                          >
-                            <option value="S1">Semestre 1 (S1)</option>
-                            <option value="S2">Semestre 2 (S2)</option>
-                          </select>
+                          {userRole === "STAFF" && activePeriod ? (
+                            <div className="block w-full rounded-xl border-orange-200 bg-gray-100 text-sm py-3 px-4">
+                              {activePeriod.semester === "S1" ? "Semestre 1 (S1)" : "Semestre 2 (S2)"}
+                            </div>
+                          ) : (
+                            <select
+                              id="semester"
+                              name="semester"
+                              value={formData.semester}
+                              onChange={(e) => onChange('semester', e.target.value as "S1" | "S2")}
+                              required
+                              className="block w-full rounded-xl border-orange-200 bg-white/80 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-sm py-3 px-4 transition-all duration-200"
+                            >
+                              <option value="S1">Semestre 1 (S1)</option>
+                              <option value="S2">Semestre 2 (S2)</option>
+                            </select>
+                          )}
                         </div>
 
                         <div>
                           <label htmlFor="year" className="block text-sm font-medium text-orange-800 mb-2">
                             Année *
                           </label>
-                          <input
-                            type="number"
-                            name="year"
-                            id="year"
-                            value={formData.year}
-                            onChange={(e) => onChange('year', parseInt(e.target.value))}
-                            required
-                            min={new Date().getFullYear() - 1}
-                            max={new Date().getFullYear() + 1}
-                            className="block w-full rounded-xl border-orange-200 bg-white/80 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-sm py-3 px-4 transition-all duration-200"
-                          />
+                          {userRole === "STAFF" && activePeriod ? (
+                            <div className="block w-full rounded-xl border-orange-200 bg-gray-100 text-sm py-3 px-4">
+                              {activePeriod.year}
+                            </div>
+                          ) : (
+                            <input
+                              type="number"
+                              name="year"
+                              id="year"
+                              value={formData.year}
+                              onChange={(e) => onChange('year', parseInt(e.target.value))}
+                              required
+                              min={new Date().getFullYear() - 1}
+                              max={new Date().getFullYear() + 1}
+                              className="block w-full rounded-xl border-orange-200 bg-white/80 shadow-sm focus:border-orange-500 focus:ring-orange-500 text-sm py-3 px-4 transition-all duration-200"
+                            />
+                          )}
                         </div>
                       </div>
 
