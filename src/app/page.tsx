@@ -203,88 +203,51 @@ export default function DashboardPage() {
       setUser(userResponse.data);
 
       // Récupérer les projets assignés
-      const assignmentsRes = await fetch("/api/assignments", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const assignmentsResponse = await assignmentsRes.json();
+      try {
+        const assignmentsRes = await fetch("/api/assignments", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const assignmentsResponse = await assignmentsRes.json();
 
-      if (
-        assignmentsResponse.success &&
-        Array.isArray(assignmentsResponse.data)
-      ) {
-        setProjects(assignmentsResponse.data);
-      } else {
-        console.error(
-          "Erreur assignments:",
-          assignmentsResponse.message || "Format de réponse invalide"
-        );
-        setProjects([]); // Définir un tableau vide en cas d'erreur
-      }
-
-      // Récupérer les entrées de temps All
-      const timeEntriesAll = await fetch("/api/time-entries", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const timeEntriesR = await timeEntriesAll.json();
-      if (timeEntriesR.success) {
-
-        // Calculer les heures totales sur les projets secondaires pour le semestre actuel
-        const now = new Date();
-        const currentSemester = now.getMonth() < 6 ? "S1" : "S2";
-        const currentYear = now.getFullYear();
-
-        // Récupérer les entrées pour l'année et le semestre actuels
-        const filteredEntries = await fetch(
-          `/api/time-entries?year=${currentYear}&semester=${currentSemester}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        const filteredResponse = await filteredEntries.json();
-
-        if (filteredResponse.success) {
-          // setTimeSheetData supprimé car plus utilisé
+        if (
+          assignmentsResponse.success &&
+          Array.isArray(assignmentsResponse.data)
+        ) {
+          setProjects(assignmentsResponse.data);
+        } else {
+          console.error(
+            "Erreur assignments:",
+            assignmentsResponse.message || "Format de réponse invalide"
+          );
+          setProjects([]); // Définir un tableau vide en cas d'erreur
         }
-
-        const totalHours = timeEntriesR.data.reduce(
-          (sum: number, te: TimeEntry) => {
-            const isCurrentPeriod =
-              te.semester === currentSemester && te.year === currentYear;
-            if (isCurrentPeriod) {
-              return sum + te.hours;
-            }
-            return sum;
-          },
-          0
-        );
-
-        setTotalSecondaryHours(totalHours);
+      } catch (error) {
+        console.error("Erreur lors du chargement des projets assignés:", error);
+        setProjects([]);
       }
 
-      // Récupérer les entrées de temps All
-      const timeEntries = await fetch("/api/time-entries", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const timeEntriesResponse = await timeEntries.json();
-      if (timeEntriesResponse.success) {
-        // Calculer les heures totales sur les projets secondaires pour le semestre actuel
-        const now = new Date();
-        const currentSemester = now.getMonth() < 6 ? "S1" : "S2";
-        const currentYear = now.getFullYear();
+      // Récupérer les entrées de temps pour le semestre actuel
+      const now = new Date();
+      const currentSemester = now.getMonth() < 6 ? "S1" : "S2";
+      const currentYear = now.getFullYear();
 
-        const totalHours = timeEntriesResponse.data.reduce(
-          (sum: number, te: TimeEntry) => {
-            const isCurrentPeriod =
-              te.semester === currentSemester && te.year === currentYear;
-            if (isCurrentPeriod) {
-              return sum + te.hours;
-            }
-            return sum;
-          },
+      const timeEntriesResponse = await fetch(
+        `/api/time-entries?year=${currentYear}&semester=${currentSemester}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const timeEntriesData = await timeEntriesResponse.json();
+      
+      if (timeEntriesData.success) {
+        // Calculer les heures totales pour le semestre actuel uniquement
+        const totalHours = timeEntriesData.data.reduce(
+          (sum: number, te: TimeEntry) => sum + te.hours,
           0
         );
-
         setTotalSecondaryHours(totalHours);
+      } else {
+        setTotalSecondaryHours(0);
       }
 
       // Supprimer ou commenter la partie qui utilise /api/time-entries

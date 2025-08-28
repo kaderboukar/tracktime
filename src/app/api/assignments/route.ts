@@ -75,9 +75,17 @@ export async function GET(req: NextRequest) {
       },
     });
 
+    // Formater les données pour correspondre au type ProjectAssignment
+    const formattedAssignments = assignments.map(assignment => ({
+      projectId: assignment.projectId,
+      project: assignment.project,
+      assignmentType: "SECONDARY" as const, // Par défaut SECONDARY
+      allocationPercentage: assignment.allocationPercentage,
+    }));
+
     return NextResponse.json({
       success: true,
-      data: assignments,
+      data: formattedAssignments,
     });
   } catch (error) {
     console.error("Erreur lors de la récupération des assignations:", error);

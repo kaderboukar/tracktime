@@ -12,6 +12,10 @@ export function WorkedHours({ totalHours }: WorkedHoursProps) {
   const currentDate = new Date();
   const currentSemester = currentDate.getMonth() < 6 ? 'S1' : 'S2';
   const currentYear = currentDate.getFullYear();
+  
+  // Formater l'affichage des heures
+  const formattedHours = totalHours.toFixed(1);
+  const remainingHours = Math.max(0, maxHours - totalHours);
 
   const getProgressColor = (percent: number) => {
     if (percent >= 100) return "bg-red-600"; // Rouge foncé pour 100%
@@ -36,14 +40,14 @@ export function WorkedHours({ totalHours }: WorkedHoursProps) {
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xl font-bold text-gray-900">
-              {totalHours.toFixed(1)}h
-            </p>
-            <p className="text-xs text-gray-500">
-              Total semestre
-            </p>
-          </div>
+                  <div>
+          <p className="text-xl font-bold text-gray-900">
+            {formattedHours}h
+          </p>
+          <p className="text-xs text-gray-500">
+            Total {currentSemester} {currentYear}
+          </p>
+        </div>
           <div className="text-right">
             <p className={`text-sm font-semibold ${
               percentage >= 100 ? 'text-red-700' : 
@@ -54,7 +58,7 @@ export function WorkedHours({ totalHours }: WorkedHoursProps) {
               {percentage.toFixed(1)}%
             </p>
             <p className="text-xs text-gray-500">
-              {Math.max(0, maxHours - totalHours).toFixed(1)}h restantes
+              {remainingHours.toFixed(1)}h restantes
               {totalHours >= maxHours && " (limite atteinte)"}
             </p>
           </div>
