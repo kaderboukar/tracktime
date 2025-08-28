@@ -6,13 +6,15 @@ type WorkedHoursProps = {
 
 export function WorkedHours({ totalHours }: WorkedHoursProps) {
   const maxHours = 480;
-  const percentage = Math.min((totalHours / maxHours) * 100, 100);
+  // S'assurer que le pourcentage ne dépasse pas 100% et gérer les cas extrêmes
+  const percentage = Math.min(Math.max((totalHours / maxHours) * 100, 0), 100);
   
   const currentDate = new Date();
   const currentSemester = currentDate.getMonth() < 6 ? 'S1' : 'S2';
   const currentYear = currentDate.getFullYear();
 
   const getProgressColor = (percent: number) => {
+    if (percent >= 100) return "bg-red-600"; // Rouge foncé pour 100%
     if (percent >= 90) return "bg-red-500";
     if (percent >= 70) return "bg-yellow-500";
     return "bg-blue-500";
@@ -44,6 +46,7 @@ export function WorkedHours({ totalHours }: WorkedHoursProps) {
           </div>
           <div className="text-right">
             <p className={`text-sm font-semibold ${
+              percentage >= 100 ? 'text-red-700' : 
               percentage >= 90 ? 'text-red-600' : 
               percentage >= 70 ? 'text-yellow-600' : 
               'text-blue-600'
@@ -52,6 +55,7 @@ export function WorkedHours({ totalHours }: WorkedHoursProps) {
             </p>
             <p className="text-xs text-gray-500">
               {Math.max(0, maxHours - totalHours).toFixed(1)}h restantes
+              {totalHours >= maxHours && " (limite atteinte)"}
             </p>
           </div>
         </div>
