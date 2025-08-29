@@ -24,14 +24,14 @@ export default function TimePeriodManager({ userRole }: TimePeriodManagerProps) 
     isActive: false
   });
 
+  useEffect(() => {
+    fetchActivePeriod();
+  }, []);
+
   // Vérifier que l'utilisateur a les permissions
   if (userRole !== "ADMIN" && userRole !== "PMSU") {
     return null;
   }
-
-  useEffect(() => {
-    fetchActivePeriod();
-  }, []);
 
   const fetchActivePeriod = async () => {
     try {
@@ -89,34 +89,34 @@ export default function TimePeriodManager({ userRole }: TimePeriodManagerProps) 
     }
   };
 
-  const handleActivatePeriod = async (periodId: number) => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("/api/time-periods", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          id: periodId,
-          isActive: true
-        }),
-      });
+  // const handleActivatePeriod = async (periodId: number) => {
+  //   try {
+  //     const token = localStorage.getItem("token");
+  //     const response = await fetch("/api/time-periods", {
+  //       method: "PUT",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //         Authorization: `Bearer ${token}`,
+  //       },
+  //       body: JSON.stringify({
+  //         id: periodId,
+  //         isActive: true
+  //       }),
+  //     });
 
-      const result = await response.json();
+  //     const result = await response.json();
 
-      if (result.success) {
-        fetchActivePeriod();
-        alert("Période activée avec succès !");
-      } else {
-        alert(result.message || "Erreur lors de l'activation de la période");
-      }
-    } catch (error) {
-      console.error("Erreur lors de l'activation de la période:", error);
-      alert("Erreur lors de l'activation de la période");
-    }
-  };
+  //     if (result.success) {
+  //       fetchActivePeriod();
+  //       alert("Période activée avec succès !");
+  //     } else {
+  //       alert(result.message || "Erreur lors de l'activation de la période");
+  //     }
+  //   } catch (error) {
+  //     console.error("Erreur lors de l'activation de la période:", error);
+  //     alert("Erreur lors de l'activation de la période");
+  //   }
+  // };
 
   if (isLoading) {
     return (
@@ -170,7 +170,7 @@ export default function TimePeriodManager({ userRole }: TimePeriodManagerProps) 
               </span>
             </div>
             <p className="text-yellow-700 text-sm mt-2">
-              Les utilisateurs STAFF ne peuvent pas saisir d'entrées de temps.
+                              Les utilisateurs STAFF ne peuvent pas saisir d&apos;entrées de temps.
             </p>
           </div>
         )}

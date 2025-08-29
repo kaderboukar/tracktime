@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { 
-  DocumentSignatureIcon, 
+  DocumentTextIcon, 
   CheckCircleIcon,
   XCircleIcon,
   ClockIcon,
@@ -20,7 +20,7 @@ interface SignatureData {
   expiresAt: string;
 }
 
-export default function TimesheetSignaturePage() {
+function TimesheetSignatureContent() {
   const searchParams = useSearchParams();
   const signatureToken = searchParams.get('token');
   
@@ -48,7 +48,7 @@ export default function TimesheetSignaturePage() {
         } else {
           setError(result.message);
         }
-      } catch (error) {
+      } catch {
         setError("Erreur lors de la récupération des informations");
       } finally {
         setLoading(false);
@@ -91,7 +91,7 @@ export default function TimesheetSignaturePage() {
       } else {
         toast.error(result.message || "Erreur lors de la signature");
       }
-    } catch (error) {
+    } catch {
       toast.error("Erreur lors de la signature");
     } finally {
       setIsSigning(false);
@@ -119,7 +119,7 @@ export default function TimesheetSignaturePage() {
             <p className="text-gray-600 mb-6">{error}</p>
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <p className="text-sm text-red-700">
-                Ce lien de signature n'est pas valide ou a expiré. 
+                Ce lien de signature n&apos;est pas valide ou a expiré. 
                 Veuillez contacter votre administrateur.
               </p>
             </div>
@@ -186,7 +186,7 @@ export default function TimesheetSignaturePage() {
         {/* En-tête */}
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 p-6 mb-8">
           <div className="flex items-center space-x-4">
-            <DocumentSignatureIcon className="w-8 h-8 text-blue-600" />
+            <DocumentTextIcon className="w-8 h-8 text-blue-600" />
             <div>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                 Signature Électronique
@@ -233,7 +233,7 @@ export default function TimesheetSignaturePage() {
                   <span className="font-medium">{new Date(signatureData.expiresAt).toLocaleDateString('fr-FR')}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Heure d'expiration :</span>
+                  <span className="text-gray-600">Heure d&apos;expiration :</span>
                   <span className="font-medium">{new Date(signatureData.expiresAt).toLocaleTimeString('fr-FR')}</span>
                 </div>
                 <div className="flex justify-between">
@@ -254,9 +254,9 @@ export default function TimesheetSignaturePage() {
             <div>
               <h3 className="text-lg font-semibold text-blue-900 mb-3">Instructions de Signature</h3>
               <div className="space-y-2 text-sm text-blue-800">
-                <p>1. <strong>Téléchargez le PDF</strong> joint à l'email que vous avez reçu</p>
+                <p>1. <strong>Téléchargez le PDF</strong> joint à l&apos;email que vous avez reçu</p>
                 <p>2. <strong>Vérifiez les informations</strong> contenues dans le document</p>
-                <p>3. <strong>Cliquez sur "Signer Électroniquement"</strong> ci-dessous</p>
+                <p>3. <strong>Cliquez sur &quot;Signer Électroniquement&quot;</strong> ci-dessous</p>
                 <p>4. <strong>Confirmez votre signature</strong> pour valider le document</p>
               </div>
             </div>
@@ -273,7 +273,7 @@ export default function TimesheetSignaturePage() {
                      transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1
                      text-lg font-semibold"
           >
-            <DocumentSignatureIcon className="w-6 h-6 mr-3" />
+                          <DocumentTextIcon className="w-6 h-6 mr-3" />
             {isSigning ? 'Signature en cours...' : 'Signer Électroniquement'}
           </button>
           
@@ -286,5 +286,20 @@ export default function TimesheetSignaturePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function TimesheetSignaturePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement...</p>
+        </div>
+      </div>
+    }>
+      <TimesheetSignatureContent />
+    </Suspense>
   );
 }

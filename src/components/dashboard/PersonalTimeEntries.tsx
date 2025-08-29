@@ -560,6 +560,7 @@ export function PersonalTimeEntries({ userId }: PersonalTimeEntriesProps) {
         parentActivity={parentActivity}
         childActivities={childActivities}
         onParentActivityChange={handleParentActivityChange}
+        userRole="STAFF"
       />
 
       <ConfirmationModal

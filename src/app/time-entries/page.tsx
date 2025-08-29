@@ -836,7 +836,7 @@ export default function TimeEntriesPage() {
         const result = await response.json();
         if (result.success && result.data) {
           // Trouver la période active
-          const active = result.data.find((period: any) => period.isActive);
+          const active = result.data.find((period: { isActive: boolean }) => period.isActive);
           if (active) {
             setActivePeriod({
               year: active.year,

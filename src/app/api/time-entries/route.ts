@@ -231,9 +231,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Récupérer la période active pour l'associer à l'entrée
-    const activePeriod = await prisma.timePeriod.findFirst({
-      where: { isActive: true }
+    // Créer ou récupérer la période de temps pour cette année/semestre
+    const timePeriod = await prisma.timePeriod.upsert({
+      where: {
+        year_semester: {
+          year: data.year,
+          semester: data.semester
+        }
+      },
+      update: {},
+      create: {
+        year: data.year,
+        semester: data.semester,
+        isActive: false // Par défaut non active
+      }
     });
 
     const timeEntry = await prisma.timeEntry.create({
@@ -245,7 +256,7 @@ export async function POST(request: NextRequest) {
         semester: data.semester,
         year: data.year,
         comment: data.comment || undefined,
-        timePeriodId: activePeriod?.id || null, // Associer à la période active
+        timePeriodId: timePeriod.id,
       },
       include: {
         user: {

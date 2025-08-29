@@ -131,7 +131,7 @@ export default function DashboardPage() {
     if (activePeriod && user?.role === "STAFF") {
       fetchHoursForPeriod(activePeriod.year, activePeriod.semester);
     }
-  }, [activePeriod, user]);
+  }, [activePeriod, user, fetchHoursForPeriod]);
 
   useEffect(() => {
     if (user) {
@@ -144,32 +144,7 @@ export default function DashboardPage() {
 
 
 
-  const fetchAvailableProjects = async (userId: number) => {
-    const token = localStorage.getItem("token");
-    if (!token || !userId) return;
 
-    try {
-      // Utiliser l'API qui récupère tous les projets SAUF ceux assignés à l'utilisateur
-      const response = await fetch(`/api/projects/users/${userId}/secondary`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await response.json();
-      if (data.success && Array.isArray(data.data)) {
-        setProjects(data.data);
-      } else {
-        console.error(
-          "Format de données invalide pour les projets disponibles"
-        );
-        setProjects([]);
-      }
-    } catch (error) {
-      console.error(
-        "Erreur lors du chargement des projets disponibles:",
-        error
-      );
-      setProjects([]);
-    }
-  };
 
   const fetchAdminData = async () => {
     const token = localStorage.getItem("token");

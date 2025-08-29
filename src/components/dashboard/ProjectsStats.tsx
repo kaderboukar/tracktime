@@ -92,10 +92,10 @@ export function ProjectsStats({
   }, [fetchActivePeriod]);
 
   // Utiliser la période active au lieu des sélecteurs manuels
-  const filter = {
+  const filter = useMemo(() => ({
     semester: activePeriod?.semester || "S1",
     year: activePeriod?.year || new Date().getFullYear(),
-  };
+  }), [activePeriod]);
 
   const filteredProjectStats = useMemo(() => {
 

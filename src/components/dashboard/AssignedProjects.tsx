@@ -10,7 +10,7 @@ export function AssignedProjects({
   projects: ProjectAssignment[];
   activePeriod?: { year: number; semester: "S1" | "S2" } | null;
 }) {
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
 
   // Filtrer les projets valides
   const validProjects = projects.filter(project => 

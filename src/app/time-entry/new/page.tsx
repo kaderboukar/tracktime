@@ -128,13 +128,6 @@ export default function NewTimeEntryPage() {
     }
   }, [user]);
 
-  // Mettre à jour les heures restantes quand la période active change
-  useEffect(() => {
-    if (user && activePeriod && !activePeriodLoading) {
-      fetchRemainingHours(user.id);
-    }
-  }, [user, activePeriod, activePeriodLoading]);
-
   // Debug: Log quand activePeriod change
   useEffect(() => {
     console.log('activePeriod a changé:', activePeriod);
@@ -227,6 +220,13 @@ export default function NewTimeEntryPage() {
       console.error("Erreur lors du calcul des heures restantes:", error);
     }
   };
+
+  // Mettre à jour les heures restantes quand la période active change
+  useEffect(() => {
+    if (user && activePeriod && !activePeriodLoading) {
+      fetchRemainingHours(user.id);
+    }
+  }, [user, activePeriod, activePeriodLoading, fetchRemainingHours]);
 
   const fetchActivePeriod = async () => {
     console.log('fetchActivePeriod appelée');
@@ -426,7 +426,7 @@ export default function NewTimeEntryPage() {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Aucune période de saisie active</h3>
               <p className="text-gray-600 mb-6">
-                Aucune période de saisie n'est actuellement configurée par l'administration.
+                Aucune période de saisie n&apos;est actuellement configurée par l&apos;administration.
               </p>
               <button
                 onClick={() => router.push("/")}

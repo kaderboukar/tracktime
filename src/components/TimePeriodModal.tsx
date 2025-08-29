@@ -38,32 +38,32 @@ export default function TimePeriodModal({ isOpen, onClose, userRole, onPeriodCha
     }
   }, [isOpen]);
 
-  const fetchActivePeriod = async () => {
-    try {
-      setIsLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/time-periods?activeOnly=true', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      const result = await response.json();
+  // const fetchActivePeriod = async () => {
+  //   try {
+  //     setIsLoading(true);
+  //     const token = localStorage.getItem('token');
+  //     const response = await fetch('/api/time-periods?activeOnly=true', {
+  //       headers: {
+  //         'Authorization': `Bearer ${token}`
+  //       }
+  //     });
+  //     const result = await response.json();
       
-      if (result.success && result.data) {
-        setActivePeriod(result.data);
-      } else {
-        setActivePeriod(null);
-      }
-    } catch (error) {
-      console.error('Erreur lors de la récupération de la période active:', error);
-      toast.error('Erreur lors du chargement des données', {
-        description: 'Impossible de récupérer la période active.'
-      });
-      setActivePeriod(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  //     if (result.success && result.data) {
+  //       setActivePeriod(result.data);
+  //     } else {
+  //       setActivePeriod(null);
+  //     }
+  //   } catch (error) {
+  //     console.error('Erreur lors de la récupération de la période active:', error);
+  //     toast.error('Erreur lors du chargement des données', {
+  //       description: 'Impossible de récupérer la période active.'
+  //     });
+  //     setActivePeriod(null);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
 
   const fetchAllPeriods = async () => {
     try {

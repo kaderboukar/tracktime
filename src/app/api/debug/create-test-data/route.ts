@@ -79,6 +79,27 @@ export async function POST() {
       },
     });
 
+    // Créer des périodes de temps
+    const timePeriod2025S1 = await prisma.timePeriod.upsert({
+      where: { year_semester: { year: 2025, semester: 'S1' } },
+      update: {},
+      create: {
+        year: 2025,
+        semester: 'S1',
+        isActive: true,
+      },
+    });
+
+    const timePeriod2024S2 = await prisma.timePeriod.upsert({
+      where: { year_semester: { year: 2024, semester: 'S2' } },
+      update: {},
+      create: {
+        year: 2024,
+        semester: 'S2',
+        isActive: false,
+      },
+    });
+
     // Créer des entrées de temps APPROUVÉES
     const timeEntry1 = await prisma.timeEntry.upsert({
       where: { id: 1 },
@@ -87,6 +108,7 @@ export async function POST() {
         userId: staffUser.id,
         projectId: project1.id,
         activityId: activity1.id,
+        timePeriodId: timePeriod2025S1.id,
         semester: 'S1',
         year: 2025,
         hours: 25.5,
@@ -102,6 +124,7 @@ export async function POST() {
         userId: staffUser.id,
         projectId: project2.id,
         activityId: activity2.id,
+        timePeriodId: timePeriod2025S1.id,
         semester: 'S1',
         year: 2025,
         hours: 18.0,
@@ -118,6 +141,7 @@ export async function POST() {
         userId: staffUser.id,
         projectId: project1.id,
         activityId: activity1.id,
+        timePeriodId: timePeriod2024S2.id,
         semester: 'S2',
         year: 2024,
         hours: 40.0,

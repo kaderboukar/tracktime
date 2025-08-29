@@ -445,19 +445,19 @@ export default function GenerateTimesheetPage() {
               </div>
               <div>
                 <h3 className="text-lg font-bold text-purple-800">Feuille de Temps Globale</h3>
-                <p className="text-sm text-purple-600">Vue d'ensemble complète</p>
+                <p className="text-sm text-purple-600">Vue d&apos;ensemble complète</p>
               </div>
             </div>
             
             <p className="text-sm text-purple-700 mb-4">
-              Vue d'ensemble complète de tous les utilisateurs et projets avec analyses croisées, 
+              Vue d&apos;ensemble complète de tous les utilisateurs et projets avec analyses croisées, 
               tendances temporelles et reporting consolidé pour la direction.
             </p>
             
             <div className="space-y-3">
               <div className="flex items-center space-x-2 text-sm text-purple-600">
                 <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-                <span>Vue d'ensemble consolidée</span>
+                <span>Vue d&apos;ensemble consolidée</span>
               </div>
               <div className="flex items-center space-x-2 text-sm text-purple-600">
                 <span className="w-2 h-2 bg-purple-500 rounded-full"></span>

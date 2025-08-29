@@ -55,7 +55,12 @@ export async function GET(request: NextRequest) {
     });
 
     // Construire la clause where avec filtres optionnels
-    const whereClause: any = {
+    const whereClause: {
+      status: "APPROVED";
+      user: { role: "STAFF" };
+      year?: number;
+      semester?: "S1" | "S2";
+    } = {
       status: "APPROVED",
       user: {
         role: "STAFF"
@@ -72,7 +77,7 @@ export async function GET(request: NextRequest) {
     } else {
       // Sinon, utiliser les filtres fournis
       whereClause.year = parseInt(year);
-      whereClause.semester = semester;
+      whereClause.semester = semester as "S1" | "S2";
       console.log(`  - Utilisation des filtres fournis:`, { year, semester });
     }
 
