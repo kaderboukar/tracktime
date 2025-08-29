@@ -254,6 +254,29 @@ export async function testEmailConfiguration(): Promise<boolean> {
   }
 }
 
+// Fonction générique pour envoyer des emails
+export async function sendEmail(options: {
+  to: string | string[];
+  subject: string;
+  html: string;
+}): Promise<boolean> {
+  try {
+    const mailOptions = {
+      from: getFormattedSender(),
+      to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
+      subject: options.subject,
+      html: options.html,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`Email envoyé à ${Array.isArray(options.to) ? options.to.join(', ') : options.to}`);
+    return true;
+  } catch (error) {
+    console.error('Erreur lors de l\'envoi de l\'email:', error);
+    return false;
+  }
+}
+
 // Interface pour les données de feuille de temps
 interface TimesheetData {
   userName: string;

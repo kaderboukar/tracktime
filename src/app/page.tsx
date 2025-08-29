@@ -12,6 +12,7 @@ import { WorkedHours } from "@/components/dashboard/WorkedHours";
 // import { PersonalProgress } from "@/components/dashboard/PersonalProgress";
 import { PersonalTimeEntries } from "@/components/dashboard/PersonalTimeEntries";
 //import { AdminStats } from "@/components/dashboard/AdminStats";
+import TimeEntryAlerts from "@/components/dashboard/TimeEntryAlerts";
 import { PlusIcon, ChartBarIcon, CalendarIcon, CheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { ProjectsStats } from "@/components/dashboard/ProjectsStats";
 import { StaffTimeSheet } from "@/components/dashboard/StaffTimeSheet";
@@ -717,6 +718,13 @@ export default function DashboardPage() {
                               hover:shadow-xl transition-all duration-300"
                 >
                   <StaffTimeSheet staffTimesheetData={staffTimeSheetData} />
+                </div>
+
+                <div
+                  className="group bg-white/70 backdrop-blur-xl p-6 rounded-2xl shadow-lg border border-white/50
+                              hover:shadow-xl transition-all duration-300"
+                >
+                  <TimeEntryAlerts />
                 </div>
               </>
             )}

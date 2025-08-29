@@ -26,6 +26,7 @@ model User {
   proformaCosts        UserProformaCost[]
   projects             UserProject[]
   signedTimesheets     SignedTimesheet[]
+  timeEntryAlerts      TimeEntryAlert[]
 }
 
 model Project {
@@ -74,6 +75,7 @@ model TimePeriod {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   timeEntries TimeEntry[]
+  timeEntryAlerts TimeEntryAlert[]
 
   @@unique([year, semester])
 }
@@ -193,4 +195,32 @@ enum ValidationStatus {
   APPROVED
   REJECTED
   REVISED
+}
+
+model TimeEntryAlert {
+  id                Int      @id @default(autoincrement())
+  userId            Int
+  timePeriodId      Int
+  alertType         AlertType
+  sentAt            DateTime @default(now())
+  daysSinceActivation Int
+  emailSent         Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  user              User     @relation(fields: [userId], references: [id])
+  timePeriod        TimePeriod @relation(fields: [timePeriodId], references: [id])
+  
+  @@unique([userId, timePeriodId, alertType])
+  @@index([userId])
+  @@index([timePeriodId])
+  @@index([alertType])
+  @@index([sentAt])
+}
+
+enum AlertType {
+  FIRST_REMINDER    // Jour 3
+  SECOND_REMINDER   // Jour 7
+  THIRD_REMINDER    // Jour 14
+  FINAL_REMINDER    // Jour 21
 }
