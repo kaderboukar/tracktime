@@ -70,15 +70,60 @@ async function sendEmailWithRetry(
   return { success: false, error: 'Nombre maximum de tentatives atteint', timeTaken };
 }
 
+// Types pour les utilisateurs et métriques
+interface UserToAlert {
+  id: number;
+  name: string;
+  email: string;
+  grade: string;
+  timeEntryAlerts: Array<{
+    alertType: string;
+  }>;
+}
+
+interface TimePeriod {
+  id: number;
+  year: number;
+  semester: string;
+  createdAt: Date;
+}
+
+interface EmailMetrics {
+  totalEmails: number;
+  successfulEmails: number;
+  failedEmails: number;
+  successRate: number;
+  averageTimePerEmail: number;
+  totalTime: number;
+  averageTimePerBatch: number;
+}
+
+interface SentAlert {
+  userId: number;
+  userName: string;
+  userEmail: string;
+  alertType: string;
+  timeTaken: number;
+}
+
+interface FailedEmail {
+  userId: number;
+  userName: string;
+  userEmail: string;
+  alertType: string;
+  reason: string;
+  timeTaken: number;
+}
+
 // Fonction pour envoyer les emails par batch avec métriques
 async function sendEmailsInBatches(
-  usersToAlert: any[],
+  usersToAlert: UserToAlert[],
   alertType: string,
-  activePeriod: any,
+  activePeriod: TimePeriod,
   daysSinceActivation: number
-): Promise<{ sentAlerts: any[]; failedEmails: any[]; metrics: any }> {
-  const sentAlerts = [];
-  const failedEmails = [];
+): Promise<{ sentAlerts: SentAlert[]; failedEmails: FailedEmail[]; metrics: EmailMetrics }> {
+  const sentAlerts: SentAlert[] = [];
+  const failedEmails: FailedEmail[] = [];
   const startTime = Date.now();
   let totalTimeTaken = 0;
   
@@ -109,7 +154,7 @@ async function sendEmailsInBatches(
           periodName: `${activePeriod.year} - ${activePeriod.semester}`
         };
 
-        let emailTemplate;
+        let emailTemplate: { subject: string; html: string };
         switch (alertType) {
           case 'FIRST_REMINDER':
             emailTemplate = getFirstReminderEmail(emailData);
@@ -123,6 +168,8 @@ async function sendEmailsInBatches(
           case 'FINAL_REMINDER':
             emailTemplate = getFinalReminderEmail(emailData);
             break;
+          default:
+            throw new Error(`Type d'alerte non reconnu: ${alertType}`);
         }
 
         // Envoyer l'email avec retry et timeout
@@ -156,7 +203,7 @@ async function sendEmailsInBatches(
             userName: user.name,
             userEmail: user.email,
             alertType,
-            reason: result.error,
+            reason: result.error || 'Erreur inconnue',
             timeTaken: result.timeTaken
           });
           console.log(`❌ Échec de l'envoi de l'alerte à ${user.name} (${user.email}) - ${result.error}`);
@@ -196,7 +243,7 @@ async function sendEmailsInBatches(
   const averageTimePerEmail = sentAlerts.length > 0 ? Math.round(totalTimeTaken / sentAlerts.length) : 0;
   
   // Métriques de performance
-  const metrics = {
+  const metrics: EmailMetrics = {
     totalEmails: usersToAlert.length,
     successfulEmails: sentAlerts.length,
     failedEmails: failedEmails.length,
@@ -392,15 +439,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `Alertes envoyées avec succès`,
-      data: {
-        daysSinceActivation,
-        alertType,
-        sentAlerts,
-        managementEmailSent,
-        totalStaffWithoutEntries: staffWithoutEntries.length,
-        totalAlertsSent: sentAlerts.length,
-        metrics // Ajout des métriques de performance
-      }
+              data: {
+          daysSinceActivation,
+          alertType,
+          sentAlerts,
+          failedEmails,
+          managementEmailSent,
+          totalStaffWithoutEntries: staffWithoutEntries.length,
+          totalAlertsSent: sentAlerts.length,
+          totalAlertsFailed: failedEmails.length,
+          successRate: usersToAlert.length > 0 ? Math.round((sentAlerts.length / usersToAlert.length) * 100) : 0,
+          metrics // Ajout des métriques de performance
+        }
     });
 
   } catch (error) {
