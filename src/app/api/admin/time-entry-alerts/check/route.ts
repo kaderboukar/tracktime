@@ -11,6 +11,7 @@ import {
   AlertEmailData,
   ManagementAlertData
 } from "@/lib/email-templates";
+import { EMAIL_BULK_CONFIG, getAdaptiveDelays, ALERT_THRESHOLDS } from "@/lib/email-config";
 
 // Configuration des alertes
 const ALERT_CONFIG = {
@@ -20,6 +21,207 @@ const ALERT_CONFIG = {
   finalReminderDays: 21,       // Dernier rappel après 21 jours
   managementEmails: ['management@undp.org'], // À configurer selon vos besoins
 };
+
+// Fonction utilitaire pour attendre
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Fonction pour envoyer un email avec retry et timeout
+async function sendEmailWithRetry(
+  emailData: AlertEmailData,
+  emailTemplate: { subject: string; html: string },
+  userEmail: string,
+  maxRetries: number = EMAIL_BULK_CONFIG.maxRetries
+): Promise<{ success: boolean; error?: string; timeTaken: number }> {
+  const startTime = Date.now();
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Timeout pour chaque tentative d'envoi
+      const emailPromise = sendEmail({
+        to: userEmail,
+        subject: emailTemplate.subject,
+        html: emailTemplate.html
+      });
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), EMAIL_BULK_CONFIG.emailTimeout)
+      );
+      
+      await Promise.race([emailPromise, timeoutPromise]);
+      
+      const timeTaken = Date.now() - startTime;
+      return { success: true, timeTaken };
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      console.error(`Tentative ${attempt}/${maxRetries} échouée pour ${userEmail}:`, errorMessage);
+      
+      if (attempt < maxRetries) {
+        console.log(`Nouvelle tentative dans ${EMAIL_BULK_CONFIG.retryDelay}ms...`);
+        await delay(EMAIL_BULK_CONFIG.retryDelay);
+      } else {
+        const timeTaken = Date.now() - startTime;
+        return { success: false, error: errorMessage, timeTaken };
+      }
+    }
+  }
+  
+  const timeTaken = Date.now() - startTime;
+  return { success: false, error: 'Nombre maximum de tentatives atteint', timeTaken };
+}
+
+// Fonction pour envoyer les emails par batch avec métriques
+async function sendEmailsInBatches(
+  usersToAlert: any[],
+  alertType: string,
+  activePeriod: any,
+  daysSinceActivation: number
+): Promise<{ sentAlerts: any[]; failedEmails: any[]; metrics: any }> {
+  const sentAlerts = [];
+  const failedEmails = [];
+  const startTime = Date.now();
+  let totalTimeTaken = 0;
+  
+  // Configuration adaptative selon le volume
+  const adaptiveConfig = getAdaptiveDelays(usersToAlert.length);
+  
+  console.log(`🚀 Début de l'envoi des alertes par batch. Total: ${usersToAlert.length} utilisateurs`);
+  console.log(`⚙️ Configuration: batchSize=${adaptiveConfig.batchSize}, délai entre batches=${adaptiveConfig.delayBetweenBatches}ms`);
+  
+  // Traiter par batches
+  for (let i = 0; i < usersToAlert.length; i += adaptiveConfig.batchSize) {
+    const batch = usersToAlert.slice(i, i + adaptiveConfig.batchSize);
+    const batchNumber = Math.floor(i / adaptiveConfig.batchSize) + 1;
+    const totalBatches = Math.ceil(usersToAlert.length / adaptiveConfig.batchSize);
+    const batchStartTime = Date.now();
+    
+    console.log(`📦 Traitement du batch ${batchNumber}/${totalBatches} (${batch.length} utilisateurs)`);
+    
+    // Traiter chaque utilisateur du batch
+    for (const user of batch) {
+      try {
+        const emailData: AlertEmailData = {
+          userName: user.name,
+          userEmail: user.email,
+          year: activePeriod.year,
+          semester: activePeriod.semester,
+          daysSinceActivation,
+          periodName: `${activePeriod.year} - ${activePeriod.semester}`
+        };
+
+        let emailTemplate;
+        switch (alertType) {
+          case 'FIRST_REMINDER':
+            emailTemplate = getFirstReminderEmail(emailData);
+            break;
+          case 'SECOND_REMINDER':
+            emailTemplate = getSecondReminderEmail(emailData);
+            break;
+          case 'THIRD_REMINDER':
+            emailTemplate = getThirdReminderEmail(emailData);
+            break;
+          case 'FINAL_REMINDER':
+            emailTemplate = getFinalReminderEmail(emailData);
+            break;
+        }
+
+        // Envoyer l'email avec retry et timeout
+        const result = await sendEmailWithRetry(emailData, emailTemplate, user.email);
+        totalTimeTaken += result.timeTaken;
+        
+        if (result.success) {
+          // Enregistrer l'alerte en base
+          await prisma.timeEntryAlert.create({
+            data: {
+              userId: user.id,
+              timePeriodId: activePeriod.id,
+              alertType,
+              daysSinceActivation,
+              emailSent: true
+            }
+          });
+
+          sentAlerts.push({
+            userId: user.id,
+            userName: user.name,
+            userEmail: user.email,
+            alertType,
+            timeTaken: result.timeTaken
+          });
+
+          console.log(`✅ Alerte ${alertType} envoyée à ${user.name} (${user.email}) - ${result.timeTaken}ms`);
+        } else {
+          failedEmails.push({
+            userId: user.id,
+            userName: user.name,
+            userEmail: user.email,
+            alertType,
+            reason: result.error,
+            timeTaken: result.timeTaken
+          });
+          console.log(`❌ Échec de l'envoi de l'alerte à ${user.name} (${user.email}) - ${result.error}`);
+        }
+
+        // Délai entre chaque email du batch
+        if (batch.indexOf(user) < batch.length - 1) {
+          await delay(adaptiveConfig.delayBetweenEmails);
+        }
+
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+        console.error(`Erreur lors du traitement de ${user.email}:`, errorMessage);
+        failedEmails.push({
+          userId: user.id,
+          userName: user.name,
+          userEmail: user.email,
+          alertType,
+          reason: `Erreur: ${errorMessage}`,
+          timeTaken: 0
+        });
+      }
+    }
+    
+    const batchTime = Date.now() - batchStartTime;
+    console.log(`⏱️ Batch ${batchNumber} terminé en ${batchTime}ms`);
+    
+    // Délai entre les batches (sauf pour le dernier)
+    if (batchNumber < totalBatches) {
+      console.log(`⏳ Attente de ${adaptiveConfig.delayBetweenBatches}ms avant le prochain batch...`);
+      await delay(adaptiveConfig.delayBetweenBatches);
+    }
+  }
+  
+  const totalTime = Date.now() - startTime;
+  const successRate = usersToAlert.length > 0 ? Math.round((sentAlerts.length / usersToAlert.length) * 100) : 0;
+  const averageTimePerEmail = sentAlerts.length > 0 ? Math.round(totalTimeTaken / sentAlerts.length) : 0;
+  
+  // Métriques de performance
+  const metrics = {
+    totalEmails: usersToAlert.length,
+    successfulEmails: sentAlerts.length,
+    failedEmails: failedEmails.length,
+    successRate,
+    averageTimePerEmail,
+    totalTime,
+    averageTimePerBatch: Math.round(totalTime / Math.ceil(usersToAlert.length / adaptiveConfig.batchSize))
+  };
+  
+  // Vérification des seuils d'alerte
+  if (successRate < ALERT_THRESHOLDS.criticalSuccessRate) {
+    console.warn(`🚨 TAUX DE SUCCÈS CRITIQUE: ${successRate}% (seuil: ${ALERT_THRESHOLDS.criticalSuccessRate}%)`);
+  } else if (successRate < ALERT_THRESHOLDS.warningSuccessRate) {
+    console.warn(`⚠️ TAUX DE SUCCÈS FAIBLE: ${successRate}% (seuil: ${ALERT_THRESHOLDS.warningSuccessRate}%)`);
+  }
+  
+  if (failedEmails.length > ALERT_THRESHOLDS.maxFailedEmails) {
+    console.warn(`🚨 NOMBRE D'ÉCHECS ÉLEVÉ: ${failedEmails.length} (seuil: ${ALERT_THRESHOLDS.maxFailedEmails})`);
+  }
+  
+  console.log(`✅ Envoi terminé en ${totalTime}ms`);
+  console.log(`📊 Métriques: Succès: ${sentAlerts.length}, Échecs: ${failedEmails.length}, Taux: ${successRate}%`);
+  
+  return { sentAlerts, failedEmails, metrics };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -149,65 +351,7 @@ export async function POST(request: NextRequest) {
     console.log(`${usersToAlert.length} utilisateurs à alerter pour ${alertType}`);
 
     // Envoyer les alertes aux utilisateurs STAFF
-    const sentAlerts = [];
-    for (const user of usersToAlert) {
-      try {
-        const emailData: AlertEmailData = {
-          userName: user.name,
-          userEmail: user.email,
-          year: activePeriod.year,
-          semester: activePeriod.semester,
-          daysSinceActivation,
-          periodName: `${activePeriod.year} - ${activePeriod.semester}`
-        };
-
-        let emailTemplate;
-        switch (alertType) {
-          case 'FIRST_REMINDER':
-            emailTemplate = getFirstReminderEmail(emailData);
-            break;
-          case 'SECOND_REMINDER':
-            emailTemplate = getSecondReminderEmail(emailData);
-            break;
-          case 'THIRD_REMINDER':
-            emailTemplate = getThirdReminderEmail(emailData);
-            break;
-          case 'FINAL_REMINDER':
-            emailTemplate = getFinalReminderEmail(emailData);
-            break;
-        }
-
-        // Envoyer l'email
-        await sendEmail({
-          to: user.email,
-          subject: emailTemplate.subject,
-          html: emailTemplate.html
-        });
-
-        // Enregistrer l'alerte en base
-        await prisma.timeEntryAlert.create({
-          data: {
-            userId: user.id,
-            timePeriodId: activePeriod.id,
-            alertType,
-            daysSinceActivation,
-            emailSent: true
-          }
-        });
-
-        sentAlerts.push({
-          userId: user.id,
-          userName: user.name,
-          userEmail: user.email,
-          alertType
-        });
-
-        console.log(`Alerte ${alertType} envoyée à ${user.name} (${user.email})`);
-
-      } catch (error) {
-        console.error(`Erreur lors de l'envoi de l'alerte à ${user.email}:`, error);
-      }
-    }
+    const { sentAlerts, failedEmails, metrics } = await sendEmailsInBatches(usersToAlert, alertType, activePeriod, daysSinceActivation);
 
     // Envoyer l'email au management si nécessaire
     let managementEmailSent = false;
@@ -254,7 +398,8 @@ export async function POST(request: NextRequest) {
         sentAlerts,
         managementEmailSent,
         totalStaffWithoutEntries: staffWithoutEntries.length,
-        totalAlertsSent: sentAlerts.length
+        totalAlertsSent: sentAlerts.length,
+        metrics // Ajout des métriques de performance
       }
     });
 

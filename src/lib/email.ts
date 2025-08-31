@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 
-// Configuration du transporteur email
+// Configuration optimisée du transporteur email pour volume élevé
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT || '587'),
@@ -9,6 +9,21 @@ const transporter = nodemailer.createTransport({
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD,
   },
+  // Configuration optimisée pour volume élevé
+  pool: true, // Utiliser un pool de connexions
+  maxConnections: 5, // Nombre maximum de connexions simultanées
+  maxMessages: 100, // Nombre maximum de messages par connexion
+  rateLimit: 20, // Limite de 20 emails par seconde
+  rateDelta: 1000, // Sur une fenêtre de 1 seconde
+  // Timeouts optimisés
+  connectionTimeout: 60000, // 60 secondes pour la connexion
+  greetingTimeout: 30000,   // 30 secondes pour le greeting
+  socketTimeout: 60000,     // 60 secondes pour les opérations socket
+  // Options de sécurité
+  tls: {
+    rejectUnauthorized: false, // Pour éviter les erreurs de certificat
+    ciphers: 'SSLv3'
+  }
 });
 
 // Fonction utilitaire pour formater l'expéditeur avec le nom d'affichage
