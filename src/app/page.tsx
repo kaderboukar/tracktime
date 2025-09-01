@@ -1,7 +1,7 @@
 // app/dashboard/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Navbar from "@/components/Navbar";
@@ -16,7 +16,7 @@ import TimeEntryAlerts from "@/components/dashboard/TimeEntryAlerts";
 import { PlusIcon, ChartBarIcon, CalendarIcon, CheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { ProjectsStats } from "@/components/dashboard/ProjectsStats";
 import { StaffTimeSheet } from "@/components/dashboard/StaffTimeSheet";
-import { TimeEntry, ProjectAssignment } from "@/components/dashboard/types";
+import { ProjectAssignment } from "@/components/dashboard/types";
 import TimePeriodModal from "@/components/TimePeriodModal";
 
 
@@ -85,25 +85,24 @@ export default function DashboardPage() {
   const [totalSecondaryHours, setTotalSecondaryHours] = useState<number>(0);
 
   // Fonction pour calculer les heures en fonction de la période active
-  const fetchHoursForPeriod = async (year: number, semester: string) => {
+  const fetchHoursForPeriod = useCallback(async (year: number, semester: string) => {
     const token = localStorage.getItem("token");
     if (!token || !user) return;
 
     try {
-      const timeEntriesResponse = await fetch(
-        `/api/time-entries?year=${year}&semester=${semester}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      // SOLUTION : Utiliser l'API qui filtre par utilisateur pour éviter le cumul
+      const response = await fetch(
+        `/api/time-entries/semester-hours?userId=${user.id}&year=${year}&semester=${semester}`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      const timeEntriesData = await timeEntriesResponse.json();
       
-      if (timeEntriesData.success) {
-        const totalHours = timeEntriesData.data.reduce(
-          (sum: number, te: TimeEntry) => sum + te.hours,
-          0
-        );
-        setTotalSecondaryHours(totalHours);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setTotalSecondaryHours(data.totalHours); // ← Heures de l'utilisateur uniquement
+        } else {
+          setTotalSecondaryHours(0);
+        }
       } else {
         setTotalSecondaryHours(0);
       }
@@ -111,7 +110,7 @@ export default function DashboardPage() {
       console.error("Erreur lors du calcul des heures pour la période:", error);
       setTotalSecondaryHours(0);
     }
-  };
+  }, [user]);
   const [staffTimeSheetData, setStaffTimeSheetData] = useState<StaffTimesheetData[]>([]);
   const [projectStatsData, setProjectStatsData] = useState<ProjectStatsData[]>([]);
   const [adminStats, setAdminStats] = useState<AdminStats | null>(null);
@@ -213,10 +212,8 @@ export default function DashboardPage() {
           };
           setActivePeriod(newPeriod);
           
-          // Mettre à jour les heures pour la nouvelle période
-          if (user?.role === "STAFF") {
-            fetchHoursForPeriod(newPeriod.year, newPeriod.semester);
-          }
+          // Les heures seront mises à jour automatiquement par le useEffect
+          // Pas besoin d'appeler fetchHoursForPeriod ici
         } else {
           setActivePeriod(null);
         }
