@@ -2,11 +2,36 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { authenticate } from "@/lib/auth";
 
+// Fonction pour authentifier via token de signature
+async function authenticateViaSignatureToken(signatureToken: string) {
+  try {
+    const signedTimesheet = await prisma.signedTimesheet.findUnique({
+      where: { signatureToken },
+      include: { user: true }
+    });
+
+    if (!signedTimesheet) {
+      return null;
+    }
+
+    if (signedTimesheet.expiresAt < new Date()) {
+      return null;
+    }
+
+    return {
+      userId: signedTimesheet.userId,
+      role: signedTimesheet.user.role,
+      signatureToken: signedTimesheet
+    };
+  } catch (error) {
+    console.error("Erreur lors de l'authentification via token de signature:", error);
+    return null;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const authResult = await authenticate(request);
-    if (authResult instanceof NextResponse) return authResult;
-
+    let authResult;
     const { signatureToken, signedPdfData } = await request.json();
 
     if (!signatureToken || !signedPdfData) {
@@ -14,6 +39,28 @@ export async function POST(request: NextRequest) {
         { success: false, message: "Token de signature et PDF signé requis" },
         { status: 400 }
       );
+    }
+
+    // Essayer d'abord l'authentification JWT standard
+    authResult = await authenticate(request);
+    
+    // Si l'authentification JWT échoue, essayer avec le token de signature
+    if (authResult instanceof NextResponse) {
+      // Vérifier si c'est une erreur d'authentification
+      if (authResult.status === 401) {
+        // Essayer l'authentification via token de signature
+        const signatureAuth = await authenticateViaSignatureToken(signatureToken);
+        if (signatureAuth) {
+          authResult = signatureAuth;
+        } else {
+          return NextResponse.json(
+            { success: false, message: "Token de signature invalide ou expiré" },
+            { status: 401 }
+          );
+        }
+      } else {
+        return authResult;
+      }
     }
 
     // Vérifier que le token de signature existe et n'est pas expiré
