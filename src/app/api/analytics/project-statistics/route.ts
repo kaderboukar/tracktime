@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { authenticate } from "@/lib/auth";
-import { calculateProjectTotalCost } from "@/lib/workHours";
+import { calculateProjectTotalCost, calculateEntryCost } from "@/lib/workHours";
 
 const prisma = new PrismaClient();
 
@@ -56,7 +56,6 @@ export async function GET(request: NextRequest) {
         
         if (proformaCost) {
           // ✅ UTILISER LA FORMULE STANDARDISÉE
-          const { calculateEntryCost } = require("@/lib/workHours");
           const entryAmount = calculateEntryCost(entry.hours, proformaCost.cost);
           
           // Statistiques par utilisateur

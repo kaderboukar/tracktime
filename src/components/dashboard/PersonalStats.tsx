@@ -1,12 +1,12 @@
 import React from "react";
-import { TimeEntry, User } from "./types";
+import { TimeEntry } from "./types";
 import {
   ChartBarIcon,
   ClockIcon,
-  CurrencyDollarIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  CurrencyDollarIcon
 } from "@heroicons/react/24/outline";
-import { calculateHourlyCost, HOURS_PER_SEMESTER } from "@/lib/workHours";
+import { calculateHourlyCost } from "@/lib/workHours";
 
 interface PersonalStatsProps {
   timeEntries: TimeEntry[];

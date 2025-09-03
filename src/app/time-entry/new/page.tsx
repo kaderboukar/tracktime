@@ -201,7 +201,7 @@ export default function NewTimeEntryPage() {
     }
   };
 
-  const fetchRemainingHours = async (userId: number) => {
+  const fetchRemainingHours = useCallback(async (userId: number) => {
     try {
       const token = localStorage.getItem("token");
       
@@ -219,7 +219,7 @@ export default function NewTimeEntryPage() {
     } catch (error) {
       console.error("Erreur lors du calcul des heures restantes:", error);
     }
-  };
+  }, [activePeriod]);
 
   // Mettre à jour les heures restantes quand la période active change
   useEffect(() => {

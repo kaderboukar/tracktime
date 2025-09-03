@@ -10,7 +10,7 @@ import {
 } from "@heroicons/react/24/outline";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { calculateHourlyCost, HOURS_PER_SEMESTER } from "@/lib/workHours";
+import { HOURS_PER_SEMESTER } from "@/lib/workHours";
 
 interface PersonalTimeSheetProps {
   timeEntries: TimeEntry[];

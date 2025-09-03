@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { calculateHourlyCost, HOURS_PER_SEMESTER } from "@/lib/workHours";
+import { HOURS_PER_SEMESTER } from "@/lib/workHours";
 
 interface ProjectDetail {
   projectName: string;
