@@ -561,6 +561,110 @@ export default function DashboardPage() {
               </div>
             )}
 
+            {/* Section Consultation des Feuilles de Temps Signées pour ADMIN et PMSU */}
+            {(user?.role === "ADMIN" || user?.role === "PMSU") && (
+              <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 shadow-lg border border-white/50 mb-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-3 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl">
+                      <span className="text-2xl">✍️</span>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">
+                        Feuilles de Temps Signées
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Consultez et téléchargez les feuilles de temps signées électroniquement
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Consultation des Feuilles Signées */}
+                  <div className="bg-gradient-to-br from-orange-50 to-red-50 border border-orange-200 rounded-xl p-4 hover:shadow-md transition-all duration-200">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="p-2 bg-orange-500 rounded-lg">
+                        <span className="text-white text-lg">📋</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-orange-800">Consultation</h4>
+                        <p className="text-xs text-orange-600">Voir & Télécharger</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-orange-700 mb-3">
+                      Consultez toutes les feuilles de temps signées avec filtres et statistiques
+                    </p>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => {
+                          // Rediriger vers la page des feuilles de temps signées
+                          window.location.href = '/admin/signed-timesheets';
+                        }}
+                        className="flex-1 bg-orange-600 text-white text-sm px-3 py-2 rounded-lg hover:bg-orange-700 transition-colors"
+                      >
+                        Consulter
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Statistiques des Signatures */}
+                  <div className="bg-gradient-to-br from-teal-50 to-cyan-50 border border-teal-200 rounded-xl p-4 hover:shadow-md transition-all duration-200">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="p-2 bg-teal-500 rounded-lg">
+                        <span className="text-white text-lg">📈</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-teal-800">Statistiques</h4>
+                        <p className="text-xs text-teal-600">Suivi en temps réel</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-teal-700 mb-3">
+                      Suivez l&apos;état des signatures : signées, en attente, expirées
+                    </p>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => {
+                          // Rediriger vers la page des feuilles de temps signées
+                          window.location.href = '/admin/signed-timesheets';
+                        }}
+                        className="flex-1 bg-teal-600 text-white text-sm px-3 py-2 rounded-lg hover:bg-teal-700 transition-colors"
+                      >
+                        Voir Stats
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Gestion des Signatures */}
+                  <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-4 hover:shadow-md transition-all duration-200">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="p-2 bg-indigo-500 rounded-lg">
+                        <span className="text-white text-lg">⚙️</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-indigo-800">Gestion</h4>
+                        <p className="text-xs text-indigo-600">Administration</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-indigo-700 mb-3">
+                      Gérez et administrez le processus de signature électronique
+                    </p>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => {
+                          // Rediriger vers la page des feuilles de temps signées
+                          window.location.href = '/admin/signed-timesheets';
+                        }}
+                        className="flex-1 bg-indigo-600 text-white text-sm px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+                      >
+                        Gérer
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Statistiques personnelles pour STAFF */}
             {user?.role === "STAFF" && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">

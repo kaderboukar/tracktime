@@ -56,6 +56,7 @@ export default function Navbar() {
     { href: "/activities", label: "Activités", roles: ["ADMIN", "PMSU"] },
     { href: "/users", label: "Utilisateurs", roles: ["ADMIN", "PMSU"] },
     { href: "/project-statistics", label: "Statistiques", roles: ["ADMIN", "PMSU", "MANAGEMENT"] },
+    { href: "/admin/signed-timesheets", label: "Feuilles Signées", roles: ["ADMIN", "PMSU"] },
   ];
 
 
