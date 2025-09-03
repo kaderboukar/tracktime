@@ -6,9 +6,11 @@ import {
   FunnelIcon,
   ArrowDownTrayIcon,
   DocumentArrowDownIcon,
+  CheckIcon,
 } from "@heroicons/react/24/outline";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import DigitalSignatureModal from "../DigitalSignatureModal";
 
 interface StaffTimeSheetProps {
   staffTimesheetData: any[];
@@ -64,6 +66,11 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
   // États pour la pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+
+  // États pour la signature électronique
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [selectedUserForSignature, setSelectedUserForSignature] = useState<any>(null);
+  const [userSignatures, setUserSignatures] = useState<Record<string, string>>({});
 
   // Pagination des données
   const totalItems = filteredData.length;
@@ -174,8 +181,6 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
     }
   };
 
-
-
   const exportToExcel = async () => {
     try {
       console.log('Début de l\'export Excel...');
@@ -189,10 +194,6 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
       }
 
       // Utiliser les données filtrées déjà chargées pour l'export
-      // Note: Pour l'export Excel, nous utilisons les données déjà filtrées par période
-      // Si vous avez besoin des données détaillées complètes, vous pouvez les récupérer ici
-      
-      // Pour l'instant, utilisons les données filtrées disponibles
       const exportData = filteredData.map((item: any, index: number) => ({
         'N°': index + 1,
         'Staff': item.userName,
@@ -202,7 +203,7 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
         'Semestre': item.semester,
         'Heures': item.totalHours,
         'Coût Proforma (USD)': Math.round(item.userProformaCost),
-        'Coût Calculé (USD)': Math.round(item.totalCalculatedCost)
+        'Coût Calculé (USD)': item.totalCost && !isNaN(item.totalCost) ? Math.round(item.totalCost) : 0
       }));
 
       // Import dynamique de XLSX
@@ -252,6 +253,10 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
   const exportUserToPDF = async (userData: any) => {
     // Fonction utilitaire pour formater les montants sans problème d'affichage
     const formatAmount = (amount: number): string => {
+      // Vérifier que le montant est valide
+      if (isNaN(amount) || !isFinite(amount)) {
+        return "0 USD";
+      }
       return `${Math.round(amount)} USD`;
     };
 
@@ -333,13 +338,19 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
         });
       }
 
+      // Calculer le total des coûts des activités (plus fiable)
+      const totalActivitiesCost = userDetailedData.reduce((sum: number, item: any) => {
+        const cost = isNaN(item.entryCalculatedCost) || !isFinite(item.entryCalculatedCost) ? 0 : item.entryCalculatedCost;
+        return sum + cost;
+      }, 0);
+
       // Ajouter le tableau
       autoTable(doc, {
         startY: 100,
         head: [['Projet', 'Activité', 'Heures', 'Coût Calculé']],
         body: tableData,
         foot: [
-          ['Total', '', `${userData.totalHours}h`, formatAmount(userData.totalCalculatedCost)]
+          ['TOTAL GÉNÉRAL', '', `${userData.totalHours}h`, formatAmount(totalActivitiesCost)]
         ],
         theme: 'grid',
         styles: {
@@ -365,11 +376,21 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
         margin: { left: 20, right: 20 },
       });
 
-      // Date et signature
-      const tableEndY = (doc as any).lastAutoTable.finalY || 180;
-      const pageHeight = (doc as any).internal.pageSize.height;
-      const signatureY = Math.max(tableEndY + 20, pageHeight - 30);
+      // Ajouter un résumé en bas du PDF
+      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      
+      doc.setFontSize(12);
+      doc.setTextColor(66, 139, 202);
+      doc.text("RÉSUMÉ", 20, finalY);
+      
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Total des heures travaillées: ${userData.totalHours}h`, 20, finalY + 8);
+      doc.text(`Coût proforma annuel: ${formatAmount(userData.userProformaCost)}`, 20, finalY + 16);
+      doc.text(`Coût total calculé: ${formatAmount(totalActivitiesCost)}`, 20, finalY + 24);
 
+      // Date et signature avec NOM DU STAFF
+      const signatureY = finalY + 40;
       doc.setFontSize(10);
       const currentDate = new Date();
       const formattedDate = currentDate.toLocaleDateString('fr-FR', {
@@ -378,81 +399,81 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
         year: 'numeric'
       });
       doc.text(`Date: ${formattedDate}`, 20, signatureY);
-      doc.text("Signature:", 200, signatureY);
-      doc.line(200, signatureY + 5, 277, signatureY + 5);
+      
+      // Section signature avec nom du STAFF
+      if (userSignatures[userData.userId]) {
+        // STAFF a signé - afficher signature + nom
+        doc.text("Signature:", 200, signatureY);
+        doc.line(200, signatureY + 5, 277, signatureY + 5);
+        
+        try {
+          // Ajouter la signature électronique
+          doc.addImage(userSignatures[userData.userId], 'PNG', 200, signatureY + 10, 30, 15);
+          
+          // Afficher le nom du STAFF qui a signé
+          doc.setFontSize(12);
+          doc.setTextColor(66, 139, 202); // Bleu
+          doc.text("✓ Signé électroniquement", 240, signatureY + 20);
+          
+          doc.setFontSize(10);
+          doc.setTextColor(0, 0, 0); // Noir
+          doc.text(`par: ${userData.userName}`, 240, signatureY + 30);
+          doc.text(`le: ${formattedDate}`, 240, signatureY + 38);
+          
+          // Ajouter un cadre autour de la signature
+          doc.setDrawColor(66, 139, 202);
+          doc.setLineWidth(0.5);
+          doc.rect(195, signatureY + 8, 85, 35);
+          
+        } catch (error) {
+          console.error("Erreur lors de l'ajout de la signature:", error);
+          // Fallback si erreur avec l'image
+          doc.text("✓ Signé par: " + userData.userName, 200, signatureY + 20);
+          doc.text("Date: " + formattedDate, 200, signatureY + 30);
+        }
+      } else {
+        // STAFF n'a pas encore signé - afficher ligne de signature vide
+        doc.text("Signature:", 200, signatureY);
+        doc.line(200, signatureY + 5, 277, signatureY + 5);
+        doc.text("(En attente de signature)", 200, signatureY + 20);
+        doc.text("Nom du signataire: _________________", 200, signatureY + 30);
+      }
 
       // Sauvegarder le PDF
       doc.save(`fiche_staff_${userData.userName}_${selectedYear}_${selectedSemester}.pdf`);
-
     } catch (error) {
-      console.error('Erreur lors de la génération du PDF:', error);
-      alert('Erreur lors de la génération du PDF. Utilisation des données de base.');
-
-      // Fallback vers l'ancienne méthode en cas d'erreur
-      const tableData: string[][] = [];
-      userData.projects.forEach((project: string) => {
-        const estimatedHours = Math.round(userData.totalHours / userData.projectsCount);
-        const estimatedCost = userData.hourlyCost * estimatedHours;
-
-        tableData.push([
-          project,
-          "Diverses activités",
-          `${estimatedHours}h`,
-          formatAmount(estimatedCost)
-        ]);
-      });
-
-      // Ajouter le tableau de fallback
-      autoTable(doc, {
-        startY: 100,
-        head: [['Projet', 'Activité', 'Heures', 'Coût Calculé']],
-        body: tableData,
-        foot: [
-          ['Total', '', `${userData.totalHours}h`, formatAmount(userData.totalCalculatedCost)]
-        ],
-        theme: 'grid',
-        styles: {
-          fontSize: 10,
-          cellPadding: 5,
-        },
-        headStyles: {
-          fillColor: [66, 139, 202],
-          textColor: 255,
-          fontStyle: 'bold',
-        },
-        footStyles: {
-          fillColor: [240, 240, 240],
-          textColor: 0,
-          fontStyle: 'bold',
-        },
-        columnStyles: {
-          0: { cellWidth: 75 },
-          1: { cellWidth: 90 },
-          2: { cellWidth: 35 },
-          3: { cellWidth: 50 },
-        },
-        margin: { left: 20, right: 20 },
-      });
-
-      // Date et signature
-      const tableEndY = (doc as any).lastAutoTable.finalY || 180;
-      const pageHeight = (doc as any).internal.pageSize.height;
-      const signatureY = Math.max(tableEndY + 20, pageHeight - 30);
-
-      doc.setFontSize(10);
-      const currentDate = new Date();
-      const formattedDate = currentDate.toLocaleDateString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-      doc.text(`Date: ${formattedDate}`, 20, signatureY);
-      doc.text("Signature:", 200, signatureY);
-      doc.line(200, signatureY + 5, 277, signatureY + 5);
-
-      // Sauvegarder le PDF
-      doc.save(`fiche_staff_${userData.userName}_${selectedYear}_${selectedSemester}.pdf`);
+      console.error("Erreur lors de la génération du PDF:", error);
+      alert("Erreur lors de la génération du PDF. Vérifiez la console pour plus de détails.");
     }
+  };
+
+  // Fonction pour ouvrir le modal de signature
+  const openSignatureModal = (userData: any) => {
+    setSelectedUserForSignature(userData);
+    setShowSignatureModal(true);
+  };
+
+  // Fonction pour gérer la signature
+  const handleSignature = (signature: string) => {
+    if (selectedUserForSignature) {
+      setUserSignatures(prev => ({
+        ...prev,
+        [selectedUserForSignature.userId]: signature
+      }));
+      setShowSignatureModal(false);
+      setSelectedUserForSignature(null);
+    }
+  };
+
+  // Fonction pour fermer le modal de signature
+  const closeSignatureModal = () => {
+    setShowSignatureModal(false);
+    setSelectedUserForSignature(null);
+  };
+
+  // Fonction pour vérifier si un utilisateur a signé
+  const hasUserSigned = (userId: string) => {
+    return !!userSignatures[userId];
   };
 
   return (
@@ -499,6 +520,8 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
           <p className="text-sm text-gray-400 mt-2">
             Année: {selectedYear}, Semestre: {selectedSemester}
           </p>
+          
+          {/* Afficher les périodes disponibles */}
           {availablePeriods.length > 0 && (
             <div className="mt-4 p-4 bg-blue-50 rounded-lg">
               <p className="text-sm text-blue-700 font-medium mb-2">Périodes disponibles dans le système :</p>
@@ -545,7 +568,7 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
                   </th>
                   <th className="pb-3 px-4 text-right">
                     <span className="text-xs font-medium text-gray-500 uppercase">
-                      Total Heures
+                      Heures
                     </span>
                   </th>
                   <th className="pb-3 px-4 text-right">
@@ -596,15 +619,37 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
                       </span>
                     </td>
                     <td className="py-4 px-4 text-right">
-                      <button
-                        onClick={() => exportUserToPDF(userData)}
-                        className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg
-                                 hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-sm hover:shadow-md
-                                 transform hover:-translate-y-0.5"
-                      >
-                        <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
-                        PDF
-                      </button>
+                      <div className="flex items-center justify-end space-x-2">
+                        <button
+                          onClick={() => openSignatureModal(userData)}
+                          className={`inline-flex items-center px-3 py-1.5 rounded-lg transition-all duration-200 ${
+                            hasUserSigned(userData.userId)
+                              ? 'bg-green-100 text-green-700 border border-green-200'
+                              : 'bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-200'
+                          }`}
+                        >
+                          {hasUserSigned(userData.userId) ? (
+                            <>
+                              <CheckIcon className="w-4 h-4 mr-1" />
+                              Signé
+                            </>
+                          ) : (
+                            <>
+                              <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
+                              Signer
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => exportUserToPDF(userData)}
+                          className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg
+                                   hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-md hover:shadow-md
+                                   transform hover:-translate-y-0.5"
+                        >
+                          <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
+                          PDF
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -654,6 +699,17 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
             </div>
           )}
         </>
+      )}
+
+      {/* Modal de signature électronique */}
+      {showSignatureModal && selectedUserForSignature && (
+        <DigitalSignatureModal
+          isOpen={showSignatureModal}
+          onClose={closeSignatureModal}
+          onSign={handleSignature}
+          userName={selectedUserForSignature.userName}
+          documentName={`Fiche de Temps STAFF - ${selectedUserForSignature.userName} (${selectedYear} - ${selectedSemester})`}
+        />
       )}
     </div>
   );
