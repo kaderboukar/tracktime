@@ -6,11 +6,9 @@ import {
   FunnelIcon,
   ArrowDownTrayIcon,
   DocumentArrowDownIcon,
-  CheckIcon,
 } from "@heroicons/react/24/outline";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import DigitalSignatureModal from "../DigitalSignatureModal";
 
 interface StaffTimeSheetProps {
   staffTimesheetData: any[];
@@ -66,11 +64,6 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
   // États pour la pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-
-  // États pour la signature électronique
-  const [showSignatureModal, setShowSignatureModal] = useState(false);
-  const [selectedUserForSignature, setSelectedUserForSignature] = useState<any>(null);
-  const [userSignatures, setUserSignatures] = useState<Record<string, string>>({});
 
   // Pagination des données
   const totalItems = filteredData.length;
@@ -400,44 +393,20 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
       });
       doc.text(`Date: ${formattedDate}`, 20, signatureY);
       
-      // Section signature avec nom du STAFF
-      if (userSignatures[userData.userId]) {
-        // STAFF a signé - afficher signature + nom
-        doc.text("Signature:", 200, signatureY);
-        doc.line(200, signatureY + 5, 277, signatureY + 5);
-        
-        try {
-          // Ajouter la signature électronique
-          doc.addImage(userSignatures[userData.userId], 'PNG', 200, signatureY + 10, 30, 15);
-          
-          // Afficher le nom du STAFF qui a signé
-          doc.setFontSize(12);
-          doc.setTextColor(66, 139, 202); // Bleu
-          doc.text("✓ Signé électroniquement", 240, signatureY + 20);
-          
-          doc.setFontSize(10);
-          doc.setTextColor(0, 0, 0); // Noir
-          doc.text(`par: ${userData.userName}`, 240, signatureY + 30);
-          doc.text(`le: ${formattedDate}`, 240, signatureY + 38);
-          
-          // Ajouter un cadre autour de la signature
-          doc.setDrawColor(66, 139, 202);
-          doc.setLineWidth(0.5);
-          doc.rect(195, signatureY + 8, 85, 35);
-          
-        } catch (error) {
-          console.error("Erreur lors de l'ajout de la signature:", error);
-          // Fallback si erreur avec l'image
-          doc.text("✓ Signé par: " + userData.userName, 200, signatureY + 20);
-          doc.text("Date: " + formattedDate, 200, signatureY + 30);
-        }
-      } else {
-        // STAFF n'a pas encore signé - afficher ligne de signature vide
-        doc.text("Signature:", 200, signatureY);
-        doc.line(200, signatureY + 5, 277, signatureY + 5);
-        doc.text("(En attente de signature)", 200, signatureY + 20);
-        doc.text("Nom du signataire: _________________", 200, signatureY + 30);
-      }
+      // Section signature avec nom du STAFF (pour le système par email existant)
+      doc.text("Signature:", 200, signatureY);
+      doc.line(200, signatureY + 5, 277, signatureY + 5);
+      
+      // Informations de signature (le STAFF signera via email)
+      doc.setFontSize(10);
+      doc.setTextColor(66, 139, 202); // Bleu
+      doc.text("📧 Signature électronique par email", 200, signatureY + 20);
+      
+      doc.setFontSize(9);
+      doc.setTextColor(0, 0, 0); // Noir
+      doc.text(`Nom du signataire: ${userData.userName}`, 200, signatureY + 30);
+      doc.text(`Période: ${selectedYear} - ${selectedSemester}`, 200, signatureY + 38);
+      doc.text("(Signature électronique envoyée par email)", 200, signatureY + 46);
 
       // Sauvegarder le PDF
       doc.save(`fiche_staff_${userData.userName}_${selectedYear}_${selectedSemester}.pdf`);
@@ -445,35 +414,6 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
       console.error("Erreur lors de la génération du PDF:", error);
       alert("Erreur lors de la génération du PDF. Vérifiez la console pour plus de détails.");
     }
-  };
-
-  // Fonction pour ouvrir le modal de signature
-  const openSignatureModal = (userData: any) => {
-    setSelectedUserForSignature(userData);
-    setShowSignatureModal(true);
-  };
-
-  // Fonction pour gérer la signature
-  const handleSignature = (signature: string) => {
-    if (selectedUserForSignature) {
-      setUserSignatures(prev => ({
-        ...prev,
-        [selectedUserForSignature.userId]: signature
-      }));
-      setShowSignatureModal(false);
-      setSelectedUserForSignature(null);
-    }
-  };
-
-  // Fonction pour fermer le modal de signature
-  const closeSignatureModal = () => {
-    setShowSignatureModal(false);
-    setSelectedUserForSignature(null);
-  };
-
-  // Fonction pour vérifier si un utilisateur a signé
-  const hasUserSigned = (userId: string) => {
-    return !!userSignatures[userId];
   };
 
   return (
@@ -612,44 +552,22 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
                       </span>
                     </td>
                     <td className="py-4 px-4 text-right">
-                      <span className="text-sm font-bold text-green-600">
+                      <span className="text-sm font-medium text-green-600">
                         {userData.totalCost && !isNaN(userData.totalCost) 
                           ? `${Math.round(userData.totalCost).toLocaleString("fr-FR")} USD` 
                           : 'N/A'}
                       </span>
                     </td>
                     <td className="py-4 px-4 text-right">
-                      <div className="flex items-center justify-end space-x-2">
-                        <button
-                          onClick={() => openSignatureModal(userData)}
-                          className={`inline-flex items-center px-3 py-1.5 rounded-lg transition-all duration-200 ${
-                            hasUserSigned(userData.userId)
-                              ? 'bg-green-100 text-green-700 border border-green-200'
-                              : 'bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-200'
-                          }`}
-                        >
-                          {hasUserSigned(userData.userId) ? (
-                            <>
-                              <CheckIcon className="w-4 h-4 mr-1" />
-                              Signé
-                            </>
-                          ) : (
-                            <>
-                              <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
-                              Signer
-                            </>
-                          )}
-                        </button>
-                        <button
-                          onClick={() => exportUserToPDF(userData)}
-                          className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg
-                                   hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-md hover:shadow-md
-                                   transform hover:-translate-y-0.5"
-                        >
-                          <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
-                          PDF
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => exportUserToPDF(userData)}
+                        className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg
+                                 hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-sm hover:shadow-md
+                                 transform hover:-translate-y-0.5"
+                      >
+                        <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
+                        PDF
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -673,7 +591,7 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
                 >
                   Précédent
                 </button>
-                <div className="flex items-center space-x-1">
+                <div className="flex items-center space-x-2">
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <button
                       key={page}
@@ -699,17 +617,6 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
             </div>
           )}
         </>
-      )}
-
-      {/* Modal de signature électronique */}
-      {showSignatureModal && selectedUserForSignature && (
-        <DigitalSignatureModal
-          isOpen={showSignatureModal}
-          onClose={closeSignatureModal}
-          onSign={handleSignature}
-          userName={selectedUserForSignature.userName}
-          documentName={`Fiche de Temps STAFF - ${selectedUserForSignature.userName} (${selectedYear} - ${selectedSemester})`}
-        />
       )}
     </div>
   );
