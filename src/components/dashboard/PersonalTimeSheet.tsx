@@ -115,6 +115,10 @@ export const PersonalTimeSheet: React.FC<PersonalTimeSheetProps> = ({
   const exportToPDF = () => {
     // Fonction utilitaire pour formater les montants sans problème d'affichage
     const formatAmount = (amount: number): string => {
+      // Vérifier que le montant est valide
+      if (isNaN(amount) || !isFinite(amount)) {
+        return "0 USD";
+      }
       return `${Math.round(amount)} USD`;
     };
 
@@ -153,6 +157,12 @@ export const PersonalTimeSheet: React.FC<PersonalTimeSheetProps> = ({
       ]);
     });
 
+    // Calculer le total des coûts des activités (plus fiable que totalCost)
+    const totalActivitiesCost = flatActivities.reduce((sum, activity) => {
+      const cost = isNaN(activity.cost) || !isFinite(activity.cost) ? 0 : activity.cost;
+      return sum + cost;
+    }, 0);
+
     // Ajouter le tableau
     autoTable(doc, {
       startY: 95,
@@ -160,10 +170,10 @@ export const PersonalTimeSheet: React.FC<PersonalTimeSheetProps> = ({
       body: tableData,
       foot: [
         [
-          "Total",
+          "TOTAL GÉNÉRAL",
           "",
           `${totalHours}h`,
-          formatAmount(totalCost),
+          formatAmount(totalActivitiesCost),
         ],
       ],
       theme: "grid",
@@ -189,6 +199,19 @@ export const PersonalTimeSheet: React.FC<PersonalTimeSheetProps> = ({
       },
       margin: { left: 20, right: 20 },
     });
+
+    // Ajouter un résumé en bas du PDF
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    
+    doc.setFontSize(12);
+    doc.setTextColor(66, 139, 202);
+    doc.text("RÉSUMÉ", 20, finalY);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Total des heures travaillées: ${totalHours}h`, 20, finalY + 8);
+    doc.text(`Coût horaire: ${formatAmount(hourlyCost)}/heure`, 20, finalY + 16);
+    doc.text(`Coût total: ${formatAmount(totalActivitiesCost)}`, 20, finalY + 24);
 
     // Sauvegarder le PDF
     doc.save(`ma_fiche_de_temps_${selectedYear}_${selectedSemester}.pdf`);
