@@ -207,10 +207,14 @@ export async function GET(request: NextRequest) {
 
     // Convertir en tableau et formater avec calculs de coût
     const formattedStaffTimesheet = Object.values(staffTimesheetStats).map((stat: StaffTimesheetStat) => {
-      // ✅ UTILISER LA FORMULE STANDARDISÉE
-      const semesterCost = stat.userProformaCost / 2; // Coût par semestre
-      const hourlyCost = semesterCost / HOURS_PER_SEMESTER; // Coût horaire (480 heures par semestre)
-      const totalCost = hourlyCost * stat.totalHours;
+      // ✅ UTILISER LA FORMULE STANDARDISÉE avec protection contre les NaN
+      let totalCost = 0;
+      
+      if (stat.userProformaCost && stat.userProformaCost > 0 && stat.totalHours > 0) {
+        const semesterCost = stat.userProformaCost / 2; // Coût par semestre
+        const hourlyCost = semesterCost / HOURS_PER_SEMESTER; // Coût horaire (480 heures par semestre)
+        totalCost = hourlyCost * stat.totalHours;
+      }
 
       return {
         userId: stat.userId,

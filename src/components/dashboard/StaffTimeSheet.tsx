@@ -590,7 +590,9 @@ export const StaffTimeSheet: React.FC<StaffTimeSheetProps> = ({ staffTimesheetDa
                     </td>
                     <td className="py-4 px-4 text-right">
                       <span className="text-sm font-bold text-green-600">
-                        {userData.totalCalculatedCost ? `${Math.round(userData.totalCalculatedCost).toLocaleString("fr-FR")} USD` : 'N/A'}
+                        {userData.totalCost && !isNaN(userData.totalCost) 
+                          ? `${Math.round(userData.totalCost).toLocaleString("fr-FR")} USD` 
+                          : 'N/A'}
                       </span>
                     </td>
                     <td className="py-4 px-4 text-right">

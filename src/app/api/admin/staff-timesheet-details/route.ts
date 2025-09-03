@@ -79,15 +79,22 @@ export async function GET(request: NextRequest) {
       const proformaCostForYear = entry.user.proformaCosts.find(pc => pc.year === entry.year);
       const userProformaCost = proformaCostForYear ? proformaCostForYear.cost : 0;
 
-      // Appliquer le calcul spécifié:
-      // 1. proformaCost / 2
-      const semesterCost = userProformaCost / 2;
+      // ✅ UTILISER LA FORMULE STANDARDISÉE avec protection contre les NaN
+      let entryCalculatedCost = 0;
+      let semesterCost = 0;
+      let hourlyCost = 0;
+      
+      if (userProformaCost && userProformaCost > 0 && entry.hours > 0) {
+        // Appliquer le calcul spécifié:
+        // 1. proformaCost / 2
+        semesterCost = userProformaCost / 2;
 
-      // 2. résultat / 480
-      const hourlyCost = semesterCost / 480;
+        // 2. résultat / 480
+        hourlyCost = semesterCost / 480;
 
-      // 3. résultat * heures de cette entrée
-      const entryCalculatedCost = hourlyCost * entry.hours;
+        // 3. résultat * heures de cette entrée
+        entryCalculatedCost = hourlyCost * entry.hours;
+      }
 
       // Construire le nom de l'activité avec parent si applicable
       let activityName = entry.activity.name;
