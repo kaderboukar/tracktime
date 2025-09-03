@@ -10,6 +10,7 @@ import {
   ClockIcon,
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
+import jsPDF from 'jspdf';
 
 interface SignatureData {
   userId: number;
@@ -64,12 +65,36 @@ function TimesheetSignatureContent() {
 
     setIsSigning(true);
     try {
-      // Simuler la signature électronique
-      // En réalité, ici on intégrerait une bibliothèque de signature PDF
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // ✅ GÉNÉRER UN VRAI PDF AU LIEU D'UNE SIMULATION
+      const doc = new jsPDF();
       
-      // Créer un PDF "signé" (simulation)
-      const signedPdfData = btoa("PDF_SIGNED_SIMULATION"); // Base64 simulation
+      // En-tête du PDF
+      doc.setFontSize(20);
+      doc.text("Feuille de Temps Signée", 105, 30, { align: 'center' });
+      
+      // Informations de la feuille de temps
+      doc.setFontSize(12);
+      doc.text(`Utilisateur: ${signatureData.userName}`, 20, 60);
+      doc.text(`Année: ${signatureData.year}`, 20, 75);
+      doc.text(`Semestre: ${signatureData.semester}`, 20, 90);
+      doc.text(`Date de signature: ${new Date().toLocaleDateString('fr-FR')}`, 20, 105);
+      
+      // Section signature
+      doc.setFontSize(14);
+      doc.text("Signature Électronique", 20, 130);
+      doc.line(20, 135, 190, 135);
+      
+      doc.setFontSize(10);
+      doc.text("Ce document a été signé électroniquement par:", 20, 150);
+      doc.text(`${signatureData.userName}`, 20, 160);
+      doc.text(`Le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`, 20, 170);
+      
+      // Pied de page
+      doc.setFontSize(8);
+      doc.text("Document généré automatiquement par le système de signature électronique", 105, 280, { align: 'center' });
+      
+      // Convertir le PDF en Base64
+      const pdfBase64 = doc.output('datauristring').split(',')[1];
       
       // Envoyer le PDF signé au serveur
       const response = await fetch('/api/timesheet/sign', {
@@ -79,7 +104,7 @@ function TimesheetSignatureContent() {
         },
         body: JSON.stringify({
           signatureToken,
-          signedPdfData
+          signedPdfData: pdfBase64
         })
       });
 
@@ -91,7 +116,8 @@ function TimesheetSignatureContent() {
       } else {
         toast.error(result.message || "Erreur lors de la signature");
       }
-    } catch {
+    } catch (error) {
+      console.error("Erreur lors de la signature:", error);
       toast.error("Erreur lors de la signature");
     } finally {
       setIsSigning(false);
