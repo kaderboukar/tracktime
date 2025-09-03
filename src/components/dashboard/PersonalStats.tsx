@@ -1,11 +1,12 @@
 import React from "react";
-import { TimeEntry } from "./types";
+import { TimeEntry, User } from "./types";
 import {
   ChartBarIcon,
   ClockIcon,
   CurrencyDollarIcon,
   DocumentTextIcon
 } from "@heroicons/react/24/outline";
+import { calculateHourlyCost, HOURS_PER_SEMESTER } from "@/lib/workHours";
 
 interface PersonalStatsProps {
   timeEntries: TimeEntry[];
@@ -32,9 +33,8 @@ export const PersonalStats: React.FC<PersonalStatsProps> = ({ timeEntries, user 
   const totalHoursCurrentSemester = currentSemesterEntries.reduce((sum, entry) => sum + entry.hours, 0);
   const totalEntriesCurrentSemester = currentSemesterEntries.length;
 
-  // Calculer le coût généré ce semestre
-  const semesterCost = user.proformaCost ? (user.proformaCost / 2) : 0;
-  const hourlyCost = semesterCost / 480; // 480 heures par semestre
+  // ✅ UTILISER LA FORMULE STANDARDISÉE
+  const hourlyCost = user.proformaCost ? calculateHourlyCost(user.proformaCost) : 0;
   const generatedCost = hourlyCost * totalHoursCurrentSemester;
 
   // Calculer les heures par projet

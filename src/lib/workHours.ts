@@ -61,3 +61,49 @@ export function isValidPeriodHours(
     message: `Pour cette période (${workingDays} jours ouvrés), vous pouvez saisir jusqu'à ${maxSecondaryHours}h sur des projets secondaires.`
   };
 }
+
+/**
+ * Calcule le coût horaire basé sur le coût proforma annuel
+ * @param annualProformaCost - Coût proforma annuel en USD
+ * @returns Coût horaire en USD
+ */
+export function calculateHourlyCost(annualProformaCost: number): number {
+  // Formule standardisée : Coût annuel / 2 (pour le semestre) / 480 (heures par semestre)
+  const semesterCost = annualProformaCost / 2;
+  const hourlyCost = semesterCost / 480;
+  return Math.round(hourlyCost * 100) / 100; // Arrondir à 2 décimales
+}
+
+/**
+ * Calcule le coût total d'une entrée de temps
+ * @param hours - Nombre d'heures travaillées
+ * @param annualProformaCost - Coût proforma annuel en USD
+ * @returns Coût total en USD
+ */
+export function calculateEntryCost(hours: number, annualProformaCost: number): number {
+  const hourlyCost = calculateHourlyCost(annualProformaCost);
+  return Math.round(hours * hourlyCost * 100) / 100; // Arrondir à 2 décimales
+}
+
+/**
+ * Calcule le coût total d'un projet
+ * @param timeEntries - Entrées de temps avec heures et coûts proforma
+ * @returns Coût total du projet en USD
+ */
+export function calculateProjectTotalCost(timeEntries: Array<{ hours: number; user: { proformaCosts: Array<{ cost: number }> } }>): number {
+  let totalCost = 0;
+  
+  timeEntries.forEach(entry => {
+    const proformaCost = entry.user.proformaCosts[0];
+    if (proformaCost) {
+      totalCost += calculateEntryCost(entry.hours, proformaCost.cost);
+    }
+  });
+  
+  return Math.round(totalCost * 100) / 100; // Arrondir à 2 décimales
+}
+
+// Constantes standardisées
+export const HOURS_PER_SEMESTER = 480;
+export const HOURS_PER_YEAR = 960; // 480 * 2
+export const SEMESTERS_PER_YEAR = 2;

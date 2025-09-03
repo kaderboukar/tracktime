@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { calculateHourlyCost, HOURS_PER_SEMESTER } from "@/lib/workHours";
 
 interface ProjectStat {
   projectId: number;
@@ -119,14 +120,14 @@ export async function GET(req: NextRequest) {
 
     // Convertir en tableau et formater avec calculs de coût
     const formattedStats = Object.values(projectStats).map((stat: ProjectStat) => {
-      // Appliquer votre formule: somme des proformaCost des utilisateurs / 2 / 480 * total heures par projet
+      // ✅ UTILISER LA FORMULE STANDARDISÉE
       const totalProformaCosts = Array.from(stat.userProformaCosts.values()).reduce((sum: number, cost: number) => sum + cost, 0);
 
-      // 1. Somme des proformaCost / 2
+      // 1. Somme des proformaCost / 2 (pour le semestre)
       const semesterCosts = totalProformaCosts / 2;
 
-      // 2. Résultat / 480
-      const hourlyCosts = semesterCosts / 480;
+      // 2. Résultat / 480 (heures par semestre)
+      const hourlyCosts = semesterCosts / HOURS_PER_SEMESTER;
 
       // 3. Résultat * total heures par projet
       const totalCalculatedCost = hourlyCosts * stat.totalHours;
@@ -143,7 +144,7 @@ export async function GET(req: NextRequest) {
         activitiesCount: stat.activities.size,
         users: Array.from(stat.users),
         activities: Array.from(stat.activities),
-        // Nouveaux champs de calcul
+        // ✅ CALCULS STANDARDISÉS
         totalProformaCosts: Math.round(totalProformaCosts),
         semesterCosts: Math.round(semesterCosts),
         hourlyCosts: Math.round(hourlyCosts * 100) / 100, // Arrondir à 2 décimales

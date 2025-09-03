@@ -10,6 +10,7 @@ import {
 } from "@heroicons/react/24/outline";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { calculateHourlyCost, HOURS_PER_SEMESTER } from "@/lib/workHours";
 
 interface PersonalTimeSheetProps {
   timeEntries: TimeEntry[];
@@ -76,9 +77,9 @@ export const PersonalTimeSheet: React.FC<PersonalTimeSheetProps> = ({
     0
   );
 
-  // Calculer le coût
+  // ✅ UTILISER LA FORMULE STANDARDISÉE
   const semesterCost = user.proformaCost ? user.proformaCost / 2 : 0;
-  const hourlyCost = semesterCost / 480;
+  const hourlyCost = semesterCost / HOURS_PER_SEMESTER;
   const totalCost = hourlyCost * totalHours;
 
   // Créer une liste plate des activités pour la pagination

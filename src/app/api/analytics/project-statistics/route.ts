@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import { authenticate } from "@/lib/auth";
+import { calculateProjectTotalCost } from "@/lib/workHours";
 
 const prisma = new PrismaClient();
 
@@ -43,8 +44,10 @@ export async function GET(request: NextRequest) {
     const projectStatistics = projectsWithTimeEntries.map(project => {
       const totalHours = project.timeEntries.reduce((sum, entry) => sum + entry.hours, 0);
       
-      // Calculer le montant total basé sur les coûts proforma des utilisateurs
-      let totalAmount = 0;
+      // ✅ UTILISER LA FORMULE STANDARDISÉE
+      const totalAmount = calculateProjectTotalCost(project.timeEntries);
+      
+      // Statistiques par utilisateur
       const userStats = new Map();
 
       project.timeEntries.forEach(entry => {
@@ -52,11 +55,9 @@ export async function GET(request: NextRequest) {
         const proformaCost = user.proformaCosts[0];
         
         if (proformaCost) {
-          // Calculer le coût par heure (coût annuel / 1920 heures par an)
-          const costPerHour = proformaCost.cost / 1920;
-          const entryAmount = entry.hours * costPerHour;
-          
-          totalAmount += entryAmount;
+          // ✅ UTILISER LA FORMULE STANDARDISÉE
+          const { calculateEntryCost } = require("@/lib/workHours");
+          const entryAmount = calculateEntryCost(entry.hours, proformaCost.cost);
           
           // Statistiques par utilisateur
           if (!userStats.has(user.id)) {

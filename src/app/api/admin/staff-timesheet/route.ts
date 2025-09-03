@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { authenticate } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { calculateHourlyCost, HOURS_PER_SEMESTER } from "@/lib/workHours";
 
 interface ProjectDetail {
   projectName: string;
@@ -204,17 +205,12 @@ export async function GET(request: NextRequest) {
       return acc;
     }, {} as Record<string, StaffTimesheetStat>);
 
-    // Convertir en tableau et formater avec calculs de coût spécifiques
+    // Convertir en tableau et formater avec calculs de coût
     const formattedStaffTimesheet = Object.values(staffTimesheetStats).map((stat: StaffTimesheetStat) => {
-      // Appliquer le calcul spécifié:
-      // 1. proformaCost / 2
-      const semesterCost = stat.userProformaCost / 2;
-
-      // 2. résultat / 480
-      const hourlyCost = semesterCost / 480;
-
-      // 3. résultat * total des heures
-      const totalCalculatedCost = hourlyCost * stat.totalHours;
+      // ✅ UTILISER LA FORMULE STANDARDISÉE
+      const semesterCost = stat.userProformaCost / 2; // Coût par semestre
+      const hourlyCost = semesterCost / HOURS_PER_SEMESTER; // Coût horaire (480 heures par semestre)
+      const totalCost = hourlyCost * stat.totalHours;
 
       return {
         userId: stat.userId,
@@ -227,9 +223,7 @@ export async function GET(request: NextRequest) {
         year: stat.year,
         semester: stat.semester,
         totalHours: stat.totalHours,
-        semesterCost: Math.round(semesterCost),
-        hourlyCost: Math.round(hourlyCost * 100) / 100, // Arrondir à 2 décimales
-        totalCalculatedCost: Math.round(totalCalculatedCost),
+        totalCost: Math.round(totalCost),
         entriesCount: stat.entriesCount,
         projectsCount: stat.projects.size,
         activitiesCount: stat.activities.size,

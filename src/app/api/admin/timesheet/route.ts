@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { calculateHourlyCost, HOURS_PER_SEMESTER } from "@/lib/workHours";
 
 interface ProjectDetail {
   projectName: string;
@@ -129,9 +130,9 @@ export async function GET(req: NextRequest) {
 
     // Convertir en tableau et formater avec calculs de coût
     const formattedTimesheet = Object.values(timesheetStats).map((stat: TimesheetStat) => {
-      // Calculer le coût basé sur les heures et le coût proforma
+      // ✅ UTILISER LA FORMULE STANDARDISÉE
       const semesterCost = stat.userProformaCost / 2; // Coût par semestre
-      const hourlyCost = semesterCost / 480; // Coût horaire (480 heures par semestre)
+      const hourlyCost = semesterCost / HOURS_PER_SEMESTER; // Coût horaire (480 heures par semestre)
       const totalCost = hourlyCost * stat.totalHours;
 
       return {
