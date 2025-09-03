@@ -222,6 +222,45 @@ export default function SignedTimesheetsPage() {
               <p className="text-gray-600">Gestion et consultation des signatures électroniques</p>
             </div>
           </div>
+
+          {/* Bouton de test PDF */}
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={async () => {
+                try {
+                  const token = localStorage.getItem("token");
+                  const response = await fetch("/api/admin/signed-timesheets/test-pdf", {
+                    headers: {
+                      Authorization: `Bearer ${token}`,
+                    },
+                  });
+
+                  if (!response.ok) {
+                    throw new Error(`Erreur lors du test: ${response.status}`);
+                  }
+
+                  // Créer un blob et télécharger
+                  const blob = await response.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "test_pdf_signature.pdf";
+                  document.body.appendChild(a);
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                  document.body.removeChild(a);
+
+                  toast.success("Test PDF téléchargé avec succès ! Vérifiez qu'il s'ouvre correctement.");
+                } catch (error) {
+                  console.error("Erreur lors du test PDF:", error);
+                  toast.error("Erreur lors du test PDF");
+                }
+              }}
+              className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg"
+            >
+              🧪 Test PDF
+            </button>
+          </div>
         </div>
 
         {/* Filtres */}
