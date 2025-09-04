@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test PDF Générateur - Format Paysage</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2563eb;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background-color: #f9fafb;
+        }
+        .test-section h3 {
+            color: #374151;
+            margin-top: 0;
+        }
+        button {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            margin: 5px;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: linear-gradient(135deg, #2563eb, #1e40af);
+            transform: translateY(-1px);
+        }
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .status.loading {
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #f59e0b;
+        }
+        .status.success {
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 1px solid #10b981;
+        }
+        .status.error {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #ef4444;
+        }
+        .pdf-preview {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .pdf-preview iframe {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .feature {
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+        .feature h4 {
+            margin: 0 0 10px 0;
+            color: #1f2937;
+        }
+        .feature p {
+            margin: 0;
+            color: #6b7280;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test Générateur PDF - Format Paysage</h1>
+        
+        <div class="features">
+            <div class="feature">
+                <h4>📐 Format Paysage</h4>
+                <p>PDF généré en format paysage pour plus d'espace horizontal</p>
+            </div>
+            <div class="feature">
+                <h4>🏷️ Numéro + Nom Projet</h4>
+                <p>Affichage du numéro et nom du projet dans la colonne projet</p>
+            </div>
+            <div class="feature">
+                <h4>📝 Retour à la Ligne</h4>
+                <p>Gestion automatique des textes longs avec retour à la ligne</p>
+            </div>
+            <div class="feature">
+                <h4>✍️ Signature Électronique</h4>
+                <p>Affichage du nom et de la date de signature</p>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>🎯 Test 1: PDF avec Signature</h3>
+            <p>Génère un PDF avec des données de test incluant une signature électronique.</p>
+            <button onclick="testPDFWithSignature()" id="btn1">
+                Générer PDF avec Signature
+            </button>
+            <div id="status1"></div>
+            <div id="preview1" class="pdf-preview"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📋 Test 2: PDF avec Placeholder</h3>
+            <p>Génère un PDF sans signature (placeholder pour signature future).</p>
+            <button onclick="testPDFWithPlaceholder()" id="btn2">
+                Générer PDF avec Placeholder
+            </button>
+            <div id="status2"></div>
+            <div id="preview2" class="pdf-preview"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📏 Test 3: Noms Extrêmement Longs</h3>
+            <p>Teste le retour à la ligne avec des noms de projets et activités très longs.</p>
+            <button onclick="testPDFWithLongNames()" id="btn3">
+                Générer PDF avec Noms Longs
+            </button>
+            <div id="status3"></div>
+            <div id="preview3" class="pdf-preview"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔄 Test 4: Données Réelles</h3>
+            <p>Génère un PDF avec des données réelles de la base de données.</p>
+            <button onclick="testPDFWithRealData()" id="btn4">
+                Générer PDF avec Données Réelles
+            </button>
+            <div id="status4"></div>
+            <div id="preview4" class="pdf-preview"></div>
+        </div>
+    </div>
+
+    <script>
+        // Données de test
+        const testDataWithSignature = {
+            userName: "Boubacar Diallo",
+            userGrade: "Senior Developer",
+            userProformaCost: 150,
+            totalHours: 160,
+            totalCalculatedCost: 24000,
+            year: 2025,
+            semester: "S1",
+            timeEntries: [
+                {
+                    projectName: "Développement Application Mobile UNDP Digital Hub pour la Gestion des Projets de Développement Durable",
+                    projectNumber: "PROJ001",
+                    activityName: "Formation des Utilisateurs et Documentation Technique Complète du Système",
+                    hours: 40,
+                    cost: 6000
+                },
+                {
+                    projectName: "Système de Gestion des Ressources Humaines et Suivi des Performances",
+                    projectNumber: "PROJ002", 
+                    activityName: "Développement des Modules de Reporting et Tableaux de Bord Analytiques",
+                    hours: 35,
+                    cost: 5250
+                },
+                {
+                    projectName: "Plateforme de Collaboration et Communication Interne",
+                    projectNumber: "PROJ003",
+                    activityName: "Intégration des Systèmes de Messagerie et Vidéoconférence",
+                    hours: 30,
+                    cost: 4500
+                }
+            ],
+            signatureInfo: {
+                signedBy: "Boubacar Diallo",
+                signedAt: new Date(),
+                signatureToken: "test-token-12345"
+            }
+        };
+
+        const testDataWithPlaceholder = {
+            ...testDataWithSignature,
+            signatureInfo: undefined
+        };
+
+        const testDataWithLongNames = {
+            ...testDataWithSignature,
+            timeEntries: [
+                {
+                    projectName: "Développement d'une Application Mobile Complète pour la Gestion Intégrée des Projets de Développement Durable et de Suivi des Objectifs de l'Agenda 2030 des Nations Unies",
+                    projectNumber: "PROJ-2025-001-UNDP-DIGITAL-HUB",
+                    activityName: "Formation Complète des Utilisateurs Finaux, Documentation Technique Détaillée, Mise en Place des Procédures de Maintenance et Support Technique Continu",
+                    hours: 50,
+                    cost: 7500
+                },
+                {
+                    projectName: "Système de Gestion Avancée des Ressources Humaines avec Intelligence Artificielle et Analyse Prédictive des Performances",
+                    projectNumber: "PROJ-2025-002-AI-HR-SYSTEM",
+                    activityName: "Développement des Modules d'Intelligence Artificielle, Implémentation des Algorithmes de Machine Learning, Création des Tableaux de Bord Interactifs et Rapports Automatisés",
+                    hours: 45,
+                    cost: 6750
+                }
+            ]
+        };
+
+        async function testPDFWithSignature() {
+            await testPDF('btn1', 'status1', 'preview1', testDataWithSignature, 'PDF avec signature généré avec succès !');
+        }
+
+        async function testPDFWithPlaceholder() {
+            await testPDF('btn2', 'status2', 'preview2', testDataWithPlaceholder, 'PDF avec placeholder généré avec succès !');
+        }
+
+        async function testPDFWithLongNames() {
+            await testPDF('btn3', 'status3', 'preview3', testDataWithLongNames, 'PDF avec noms longs généré avec succès !');
+        }
+
+        async function testPDFWithRealData() {
+            await testPDF('btn4', 'status4', 'preview4', null, 'PDF avec données réelles généré avec succès !');
+        }
+
+        async function testPDF(buttonId, statusId, previewId, testData, successMessage) {
+            const button = document.getElementById(buttonId);
+            const status = document.getElementById(statusId);
+            const preview = document.getElementById(previewId);
+
+            // Désactiver le bouton et afficher le statut de chargement
+            button.disabled = true;
+            button.textContent = 'Génération en cours...';
+            status.innerHTML = '<div class="status loading">🔄 Génération du PDF en cours...</div>';
+            preview.innerHTML = '';
+
+            try {
+                let response;
+                
+                if (testData) {
+                    // Test avec données de test
+                    response = await fetch('/api/timesheet/original-pdf', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            timesheetData: testData,
+                            testMode: true
+                        })
+                    });
+                } else {
+                    // Test avec données réelles
+                    response = await fetch('/api/timesheet/original-pdf', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            testMode: true,
+                            useRealData: true
+                        })
+                    });
+                }
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    
+                    status.innerHTML = `<div class="status success">✅ ${successMessage}</div>`;
+                    preview.innerHTML = `
+                        <iframe src="${url}" type="application/pdf"></iframe>
+                        <p><a href="${url}" download="test-pdf.pdf" target="_blank">📥 Télécharger le PDF</a></p>
+                    `;
+                } else {
+                    const errorText = await response.text();
+                    status.innerHTML = `<div class="status error">❌ Erreur: ${errorText}</div>`;
+                }
+            } catch (error) {
+                status.innerHTML = `<div class="status error">❌ Erreur: ${error.message}</div>`;
+            } finally {
+                // Réactiver le bouton
+                button.disabled = false;
+                button.textContent = buttonId === 'btn1' ? 'Générer PDF avec Signature' :
+                                   buttonId === 'btn2' ? 'Générer PDF avec Placeholder' :
+                                   buttonId === 'btn3' ? 'Générer PDF avec Noms Longs' :
+                                   'Générer PDF avec Données Réelles';
+            }
+        }
+
+        // Fonction pour tester l'API directement
+        async function testAPI() {
+            try {
+                const response = await fetch('/api/timesheet/original-pdf', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        testMode: true,
+                        timesheetData: testDataWithSignature
+                    })
+                });
+
+                if (response.ok) {
+                    console.log('✅ API fonctionne correctement');
+                    const blob = await response.blob();
+                    console.log('📄 PDF généré:', blob.size, 'bytes');
+                } else {
+                    console.error('❌ Erreur API:', response.status, response.statusText);
+                }
+            } catch (error) {
+                console.error('❌ Erreur:', error);
+            }
+        }
+
+        // Test automatique au chargement de la page
+        window.addEventListener('load', () => {
+            console.log('🧪 Page de test chargée');
+            testAPI();
+        });
+    </script>
+</body>
+</html>

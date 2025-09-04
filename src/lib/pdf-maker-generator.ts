@@ -332,7 +332,7 @@ async function drawEnhancedActivitiesTable(
   });
   
   // Texte de l'en-tête
-  const headers = ["Projet", "Activité", "Heures", "Coût (USD)", "Total"];
+  const headers = ["Projet", "Activité", "Heures", "Coût (USD)"];
   headers.forEach((header, index) => {
     page.drawText(header, {
       x: columnX[index] + 8,

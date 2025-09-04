@@ -181,6 +181,7 @@ function TimesheetSignatureContent() {
   }
 
   const isExpired = new Date(signatureData.expiresAt) < new Date();
+  const isAlreadySigned = signatureData.signatureStatus === 'SIGNED';
 
   if (isExpired) {
     return (
@@ -196,6 +197,61 @@ function TimesheetSignatureContent() {
               <p className="text-sm text-orange-700">
                 Veuillez contacter votre administrateur pour obtenir un nouveau lien de signature.
               </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAlreadySigned) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/50 to-indigo-50 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full mx-4">
+          <div className="text-center">
+            <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto mb-4" />
+            <h1 className="text-xl font-bold text-gray-900 mb-2">Déjà Signé</h1>
+            <p className="text-gray-600 mb-6">
+              Cette feuille de temps a déjà été signée électroniquement.
+            </p>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <p className="text-sm text-green-700">
+                <strong>Utilisateur :</strong> {signatureData.userName}<br/>
+                <strong>Période :</strong> {signatureData.year} - {signatureData.semester}<br/>
+                <strong>Statut :</strong> Signé
+              </p>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  // Ouvrir le PDF signé dans un nouvel onglet
+                  window.open(`/api/timesheet/sign?token=${signatureToken}`, '_blank');
+                }}
+                className="w-full inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg
+                         hover:bg-blue-700 transition-colors duration-200 font-medium"
+              >
+                <DocumentTextIcon className="w-5 h-5 mr-2" />
+                Voir le PDF Signé
+              </button>
+              
+              <button
+                onClick={() => {
+                  // Télécharger le PDF signé
+                  const link = document.createElement('a');
+                  link.href = `/api/timesheet/sign?token=${signatureToken}`;
+                  link.download = `feuille_temps_signee_${signatureData.userName}_${signatureData.year}_${signatureData.semester}.pdf`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                className="w-full inline-flex items-center justify-center px-4 py-2 bg-gray-600 text-white rounded-lg
+                         hover:bg-gray-700 transition-colors duration-200 font-medium"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Télécharger le PDF
+              </button>
             </div>
           </div>
         </div>
@@ -231,8 +287,12 @@ function TimesheetSignatureContent() {
             </div>
             <div>
               <span className="text-gray-500">Statut:</span>
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                En attente
+              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                signatureData.signatureStatus === 'SIGNED' 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-yellow-100 text-yellow-800'
+              }`}>
+                {signatureData.signatureStatus === 'SIGNED' ? 'Signé' : 'En attente'}
               </span>
             </div>
           </div>
@@ -255,19 +315,32 @@ function TimesheetSignatureContent() {
         <div className="text-center">
           <button
             onClick={handleElectronicSignature}
-            disabled={isSigning}
-            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg
-                     hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed 
-                     transition-colors duration-200 font-medium"
+            disabled={isSigning || signatureData.signatureStatus === 'SIGNED'}
+            className={`inline-flex items-center px-6 py-3 rounded-lg transition-colors duration-200 font-medium ${
+              signatureData.signatureStatus === 'SIGNED'
+                ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
+            }`}
           >
             <DocumentTextIcon className="w-5 h-5 mr-2" />
-            {isSigning ? 'Signature en cours...' : 'Signer Électroniquement'}
+            {signatureData.signatureStatus === 'SIGNED' 
+              ? 'Déjà Signé' 
+              : isSigning 
+                ? 'Signature en cours...' 
+                : 'Signer Électroniquement'
+            }
           </button>
           
           {isSigning && (
             <div className="mt-3 text-sm text-gray-600">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mx-auto mb-1"></div>
               Traitement en cours...
+            </div>
+          )}
+          
+          {signatureData.signatureStatus === 'SIGNED' && (
+            <div className="mt-3 text-sm text-gray-600">
+              <p>Cette feuille de temps a déjà été signée. Vous ne pouvez plus la signer à nouveau.</p>
             </div>
           )}
         </div>
