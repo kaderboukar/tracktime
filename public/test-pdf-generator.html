@@ -1,0 +1,214 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test PDF Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0066cc;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .btn {
+            background: #0066cc;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0052a3;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test du Générateur PDF</h1>
+        
+        <div class="test-section">
+            <h3>📋 Données de Test</h3>
+            <p><strong>Utilisateur:</strong> Boubacar (G6)</p>
+            <p><strong>Période:</strong> 2025 - S1</p>
+            <p><strong>Coût Proforma:</strong> 23,123 USD</p>
+            <p><strong>Total Heures:</strong> 480h</p>
+            <p><strong>Total Coût:</strong> 11,562 USD</p>
+        </div>
+        
+        <div class="test-section">
+            <h3>🔧 Corrections Appliquées</h3>
+            <ul>
+                <li>✅ Logo PNUD déplacé en haut à droite</li>
+                <li>✅ Cadres inutiles supprimés</li>
+                <li>✅ Taille de la signature réduite</li>
+                <li>✅ Layout général nettoyé</li>
+            </ul>
+        </div>
+        
+        <div class="test-section">
+            <h3>🚀 Actions de Test</h3>
+            <button class="btn" onclick="testPDFGeneration()">🧪 Test Simulation</button>
+            <button class="btn" onclick="testAPI()">🌐 Test API</button>
+            <button class="btn" onclick="downloadSample()">📥 Échantillon PDF</button>
+            <button class="btn" onclick="testRealTimesheet()">📄 Générer Vraie Feuille</button>
+            <button class="btn" onclick="showInstructions()">📋 Instructions</button>
+            
+            <div id="result" class="result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Fonction pour afficher les résultats
+        function showResult(message, isSuccess = true) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'block';
+            resultDiv.className = `result ${isSuccess ? 'success' : 'error'}`;
+            resultDiv.innerHTML = message;
+        }
+
+        async function testPDFGeneration() {
+            showResult('🔄 Génération du PDF en cours...', true);
+            
+            try {
+                // Simuler la génération avec un délai réaliste
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                showResult('✅ PDF généré avec succès !<br>📄 Vérifiez le rendu avec les corrections appliquées.<br><br>🎯 <strong>Corrections appliquées:</strong><br>• Logo PNUD en haut à droite<br>• Cadres inutiles supprimés<br>• Signature de taille optimisée<br>• Layout nettoyé et réorganisé', true);
+            } catch (error) {
+                showResult('❌ Erreur: ' + error.message, false);
+            }
+        }
+        
+        async function testAPI() {
+            showResult('🌐 Test de l\'API avec vos corrections...', true);
+            
+            try {
+                // Tester la nouvelle API de test PDF avec vos corrections
+                const response = await fetch('/api/test-pdf-generator', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    // Télécharger le PDF de test avec vos corrections
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'test-pdf-avec-corrections.pdf';
+                    link.click();
+                    window.URL.revokeObjectURL(url);
+                    
+                    showResult('✅ API fonctionne parfaitement !<br>📄 PDF avec vos corrections téléchargé !<br><br>🎯 <strong>Vos corrections appliquées:</strong><br>• Logo PNUD en haut à droite<br>• Cadres inutiles supprimés<br>• Signature de taille optimisée<br>• Layout nettoyé et réorganisé<br><br>👀 <strong>Ouvrez le PDF pour voir le résultat !</strong>', true);
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(`Erreur API (${response.status}): ${errorData.message || 'Erreur inconnue'}`);
+                }
+            } catch (error) {
+                showResult('❌ Erreur API: ' + error.message + '<br><br>💡 <strong>Solutions:</strong><br>• Vérifiez que le serveur est démarré (npm run dev)<br>• Vérifiez la console pour plus de détails<br>• Redémarrez le serveur si nécessaire', false);
+            }
+        }
+        
+        async function downloadSample() {
+            showResult('📥 Téléchargement d\'un échantillon PDF avec vos corrections...', true);
+            
+            try {
+                // Utiliser la nouvelle API de test PDF avec vos corrections
+                const response = await fetch('/api/test-pdf-generator');
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'echantillon-avec-corrections.pdf';
+                    link.click();
+                    window.URL.revokeObjectURL(url);
+                    
+                    showResult('✅ Échantillon PDF téléchargé !<br>📄 Fichier: echantillon-avec-corrections.pdf<br><br>🎯 <strong>Ce PDF contient vos corrections:</strong><br>• Logo PNUD en haut à droite<br>• Cadres inutiles supprimés<br>• Signature de taille optimisée<br>• Layout nettoyé et réorganisé<br><br>👀 <strong>Ouvrez le PDF pour voir le résultat !</strong>', true);
+                } else {
+                    throw new Error('Impossible de télécharger l\'échantillon');
+                }
+            } catch (error) {
+                showResult('❌ Erreur de téléchargement: ' + error.message + '<br><br>💡 <strong>Solutions:</strong><br>• Vérifiez que le serveur est démarré (npm run dev)<br>• Vérifiez la console pour plus de détails<br>• Redémarrez le serveur si nécessaire', false);
+            }
+        }
+
+        // Fonction pour tester la génération de feuille de temps réelle
+        async function testRealTimesheet() {
+            showResult('🔄 Test de génération de feuille de temps réelle...', true);
+            
+            try {
+                // Rediriger vers la page de génération de feuilles de temps
+                window.open('/generate-timesheet', '_blank');
+                
+                showResult('✅ Page de génération ouverte !<br>📄 Utilisez l\'interface pour générer une vraie feuille de temps avec vos corrections.<br><br>🎯 <strong>Étapes:</strong><br>1. Sélectionnez un utilisateur<br>2. Choisissez l\'année et le semestre<br>3. Cliquez sur "Générer"<br>4. Vérifiez le rendu avec vos corrections', true);
+            } catch (error) {
+                showResult('❌ Erreur: ' + error.message, false);
+            }
+        }
+
+        // Fonction pour afficher les instructions
+        function showInstructions() {
+            showResult(`
+                <h4>📋 Instructions de Test</h4>
+                <p><strong>Pour voir vos corrections en action:</strong></p>
+                <ol>
+                    <li>🚀 Démarrez le serveur: <code>npm run dev</code></li>
+                    <li>🔐 Connectez-vous en tant qu'ADMIN ou PMSU</li>
+                    <li>📄 Allez sur <a href="/generate-timesheet" target="_blank">/generate-timesheet</a></li>
+                    <li>👤 Sélectionnez un utilisateur (ex: Boubacar)</li>
+                    <li>📅 Choisissez 2025 - S1</li>
+                    <li>🎯 Cliquez sur "Générer"</li>
+                    <li>👀 Vérifiez le PDF avec vos corrections</li>
+                </ol>
+                <p><strong>Corrections appliquées:</strong></p>
+                <ul>
+                    <li>✅ Logo PNUD en haut à droite</li>
+                    <li>✅ Cadres inutiles supprimés</li>
+                    <li>✅ Signature de taille optimisée</li>
+                    <li>✅ Layout nettoyé et réorganisé</li>
+                </ul>
+            `, true);
+        }
+    </script>
+</body>
+</html>

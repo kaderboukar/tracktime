@@ -1,5 +1,5 @@
 import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont } from 'pdf-lib';
-import fontkit from '@pdf-lib/fontkit';
+import * as fontkit from '@pdf-lib/fontkit';
 
 export interface TimesheetData {
   userName: string;
@@ -64,36 +64,39 @@ export async function generateTimesheetPDFWithPDFMaker(
   // Marges et espacements améliorés
   const margin = 40;
   const contentWidth = width - (2 * margin);
-  let currentY = height - margin;
+  // const footerHeight = 50; // Non utilisé
+  // const minBottomMargin = margin + footerHeight; // Non utilisé
   
   // === FOND DE PAGE ===
   await drawPageBackground(page, styles, width, height);
   
   // === EN-TÊTE AMÉLIORÉ ===
-  await drawEnhancedHeader(page, timesheetData, styles, margin, currentY, font, boldFont);
-  currentY -= 100;
+  const headerHeight = await drawEnhancedHeader(page, timesheetData, styles, margin, height - margin, font, boldFont, contentWidth);
+  let currentY = height - margin - headerHeight - 40; // Plus d'espace entre l'en-tête et les infos staff
   
   // === INFORMATIONS UTILISATEUR RÉORGANISÉES ===
-  await drawEnhancedUserInfo(page, timesheetData, styles, margin, currentY, font, boldFont, contentWidth);
-  currentY -= 80;
+  const userInfoHeight = await drawEnhancedUserInfo(page, timesheetData, styles, margin, currentY, font, boldFont);
+  currentY -= userInfoHeight + 30;
+  
+  // Pas de séparateur - aller directement au tableau
+  currentY -= 10;
   
   // === TABLEAU DES ACTIVITÉS AMÉLIORÉ ===
-  const tableEndY = await drawEnhancedActivitiesTable(page, timesheetData, styles, margin, currentY, font, boldFont, contentWidth);
-  currentY = tableEndY - 50;
+  const tableHeight = await drawEnhancedActivitiesTable(page, timesheetData, styles, margin, currentY, font, boldFont, contentWidth);
+  currentY -= tableHeight + 30;
   
-  // === TOTAUX STYLISÉS ===
-  await drawStyledTotals(page, timesheetData, styles, margin, currentY, font, boldFont);
-  currentY -= 80;
+  // === SECTION SIGNATURE EN BAS À DROITE ===
+  // Positionner la signature en bas à droite de la page
+  const signatureX = margin + contentWidth - 200; // 200px de largeur pour la signature
+  const signatureY = margin + 80; // 80px du bas de la page
   
-  // === SECTION SIGNATURE AMÉLIORÉE ===
   if (timesheetData.signatureInfo) {
-    await drawEnhancedSignature(page, timesheetData.signatureInfo, styles, margin, currentY, font, boldFont);
+    await drawEnhancedSignature(page, timesheetData.signatureInfo, styles, signatureX, signatureY, font, boldFont);
   } else {
-    await drawEnhancedSignaturePlaceholder(page, styles, margin, currentY, font, boldFont);
+    await drawEnhancedSignaturePlaceholder(page, styles, signatureX, signatureY, font, boldFont);
   }
   
-  // === PIED DE PAGE STYLISÉ ===
-  await drawStyledFooter(page, styles, margin, 30, font);
+  // Pas de pied de page
   
   // Retourner le PDF comme buffer
   return await pdfDoc.save();
@@ -101,28 +104,36 @@ export async function generateTimesheetPDFWithPDFMaker(
 
 // === NOUVELLES FONCTIONS DE DESSIN ===
 
+// Fonction non utilisée - commentée
+// async function drawSectionSeparator(
+//   page: PDFPage,
+//   styles: PDFStyle,
+//   x: number,
+//   y: number,
+//   width: number
+// ): Promise<void> {
+//   // Ligne de séparation simple
+//   page.drawLine({
+//     start: { x: x, y: y },
+//     end: { x: x + width, y: y },
+//     thickness: 1,
+//     color: rgb(...styles.primaryColor),
+//   });
+// }
+
 async function drawPageBackground(
   page: PDFPage,
   styles: PDFStyle,
   width: number,
   height: number
 ): Promise<void> {
-  // Fond principal
+  // Fond principal seulement (pas de barre bleue)
   page.drawRectangle({
     x: 0,
     y: 0,
     width: width,
     height: height,
     color: rgb(...styles.backgroundColor),
-  });
-  
-  // Bande décorative en haut
-  page.drawRectangle({
-    x: 0,
-    y: height - 15,
-    width: width,
-    height: 15,
-    color: rgb(...styles.primaryColor),
   });
 }
 
@@ -133,54 +144,76 @@ async function drawEnhancedHeader(
   x: number,
   y: number,
   font: PDFFont,
-  boldFont: PDFFont
-): Promise<void> {
-  // Logo PNUD (rectangle stylisé en attendant le vrai logo)
-  page.drawRectangle({
-    x: x,
-    y: y - 50,
-    width: 80,
-    height: 50,
-    color: rgb(...styles.primaryColor),
-    borderColor: rgb(...styles.primaryColor),
-    borderWidth: 3,
-  });
+  boldFont: PDFFont,
+  contentWidth: number
+): Promise<number> {
+  // Logo PNUD réel en haut à droite - agrandi et mieux ajusté
+  const logoWidth = 90;
+  const logoHeight = 120;
+  const logoX = x + contentWidth - logoWidth;
   
-  // Texte "PNUD" dans le logo
-  page.drawText("PNUD", {
-    x: x + 20,
-    y: y - 30,
+  try {
+    // Charger le logo PNUD réel depuis le système de fichiers
+    const fs = require('fs'); // eslint-disable-line @typescript-eslint/no-require-imports
+    const path = require('path'); // eslint-disable-line @typescript-eslint/no-require-imports
+    const logoPath = path.join(process.cwd(), 'public', 'logoundp.png');
+    
+    if (fs.existsSync(logoPath)) {
+      const logoBytes = fs.readFileSync(logoPath);
+      const logoImage = await page.doc.embedPng(logoBytes);
+      
+      page.drawImage(logoImage, {
+        x: logoX,
+        y: y - logoHeight,
+        width: logoWidth,
+        height: logoHeight,
+      });
+      console.log('✅ Logo PNUD chargé avec succès');
+    } else {
+      throw new Error('Logo file not found');
+    }
+  } catch {
+    console.log('Logo non trouvé, utilisation du texte PNUD');
+    // Fallback si le logo n'est pas trouvé
+    page.drawRectangle({
+      x: logoX,
+      y: y - logoHeight,
+      width: logoWidth,
+      height: logoHeight,
+      color: rgb(...styles.primaryColor),
+      borderColor: rgb(...styles.primaryColor),
+      borderWidth: 2,
+    });
+    
+    page.drawText("PNUD", {
+      x: logoX + 15,
+      y: y - 25,
+      size: 14,
+      font: boldFont,
+      color: rgb(1, 1, 1),
+    });
+  }
+  
+  // Titre principal centré
+  page.drawText("FICHE DE TEMPS", {
+    x: x,
+    y: y - 20,
     size: 16,
     font: boldFont,
-    color: rgb(1, 1, 1),
-  });
-  
-  // Titre principal avec ombre
-  page.drawText("FICHE DE TEMPS", {
-    x: x + 100,
-    y: y - 20,
-    size: 28,
-    font: boldFont,
     color: rgb(...styles.primaryColor),
-  });
-  
-  // Sous-titre
-  page.drawText("UNDP Digital Hub - Système de Gestion des Temps", {
-    x: x + 100,
-    y: y - 40,
-    size: 12,
-    font: font,
-    color: rgb(...styles.textColor),
   });
   
   // Informations de période
   page.drawText(`Période: ${data.year} - ${data.semester}`, {
-    x: x + 100,
-    y: y - 55,
-    size: 14,
+    x: x,
+    y: y - 40,
+    size: 10,
     font: boldFont,
     color: rgb(...styles.accentColor),
   });
+  
+  // Retourner la hauteur utilisée par l'en-tête
+  return 60;
 }
 
 async function drawEnhancedUserInfo(
@@ -191,49 +224,34 @@ async function drawEnhancedUserInfo(
   y: number,
   font: PDFFont,
   boldFont: PDFFont,
-  contentWidth: number
-): Promise<void> {
-  // Fond de la section
-  page.drawRectangle({
-    x: x - 10,
-    y: y + 10,
-    width: contentWidth + 20,
-    height: 70,
-    color: rgb(...styles.secondaryColor),
-    borderColor: rgb(...styles.primaryColor),
-    borderWidth: 1,
-  });
-  
-  // Titre de section
-  page.drawText("INFORMATIONS DE L'EMPLOYÉ", {
+  // _contentWidth: number // Non utilisé
+): Promise<number> {
+  // Titre de section avec taille réduite
+  page.drawText("INFORMATIONS DU STAFF", {
     x: x,
     y: y,
-    size: 16,
+    size: 12,
     font: boldFont,
     color: rgb(...styles.primaryColor),
   });
   
-  y -= 30;
+  y -= 25;
   
-  // Grille d'informations (2 colonnes)
-  const leftColumn = [
+  // Informations en colonne unique - Coût Proforma en dessous de Grade
+  const infoItems = [
     { label: "Nom", value: data.userName },
-    { label: "Grade", value: data.userGrade || "N/A" }
-  ];
-  
-  const rightColumn = [
-    { label: "Période", value: `${data.year} - ${data.semester}` },
+    { label: "Grade", value: data.userGrade || "N/A" },
     { label: "Coût Proforma", value: `${data.userProformaCost.toLocaleString('fr-FR')} USD` }
   ];
   
-  // Colonne gauche
-  leftColumn.forEach((item, index) => {
-    const itemY = y - (index * 20);
+  // Affichage en colonne unique avec taille réduite
+  infoItems.forEach((item, index) => {
+    const itemY = y - (index * 18);
     
     page.drawText(`${item.label}:`, {
       x: x,
       y: itemY,
-      size: 12,
+      size: 10,
       font: boldFont,
       color: rgb(...styles.textColor),
     });
@@ -242,37 +260,16 @@ async function drawEnhancedUserInfo(
     const cleanValue = cleanText(item.value);
     
     page.drawText(cleanValue, {
-      x: x + 80,
+      x: x + 100,
       y: itemY,
-      size: 12,
+      size: 10,
       font: font,
       color: rgb(...styles.textColor),
     });
   });
   
-  // Colonne droite
-  rightColumn.forEach((item, index) => {
-    const itemY = y - (index * 20);
-    
-    page.drawText(`${item.label}:`, {
-      x: x + 250,
-      y: itemY,
-      size: 12,
-      font: boldFont,
-      color: rgb(...styles.textColor),
-    });
-    
-    // Nettoyer et valider la valeur
-    const cleanValue = cleanText(item.value);
-    
-    page.drawText(cleanValue, {
-      x: x + 330,
-      y: itemY,
-      size: 12,
-      font: font,
-      color: rgb(...styles.textColor),
-    });
-  });
+  // Retourner la hauteur utilisée par la section utilisateur (ajustée pour 3 lignes)
+  return 60;
 }
 
 async function drawEnhancedActivitiesTable(
@@ -285,16 +282,8 @@ async function drawEnhancedActivitiesTable(
   boldFont: PDFFont,
   tableWidth: number
 ): Promise<number> {
-  // Titre de section
-  page.drawText("DÉTAIL DES ACTIVITÉS", {
-    x: x,
-    y: y,
-    size: 16,
-    font: boldFont,
-    color: rgb(...styles.primaryColor),
-  });
-  
-  y -= 30;
+  // Pas de titre de section - aller directement au tableau
+  y -= 10;
   
   // En-tête du tableau avec design amélioré
   const headerY = y;
@@ -324,36 +313,25 @@ async function drawEnhancedActivitiesTable(
   
   y -= 45;
   
-  // Lignes de données avec design alterné
+  // Lignes de données avec design alterné et espacement amélioré
   data.timeEntries.forEach((entry, index) => {
-    const rowY = y - (index * 18);
+    const rowY = y - (index * 20);
     
     // Alternance de couleurs pour les lignes
     const rowColor = index % 2 === 0 ? rgb(...styles.secondaryColor) : rgb(1, 1, 1);
     
     page.drawRectangle({
       x: x,
-      y: rowY - 12,
+      y: rowY - 15,
       width: tableWidth,
       height: 18,
       color: rowColor,
     });
     
-    // Bordure subtile
-    page.drawRectangle({
-      x: x,
-      y: rowY - 12,
-      width: tableWidth,
-      height: 18,
-      color: rgb(0.9, 0.9, 0.9),
-      borderColor: rgb(0.9, 0.9, 0.9),
-      borderWidth: 0.5,
-    });
-    
     // Données de la ligne
     page.drawText(cleanText(entry.projectName), {
       x: columnX[0] + 8,
-      y: rowY - 5,
+      y: rowY - 8,
       size: 10,
       font: font,
       color: rgb(...styles.textColor),
@@ -361,7 +339,7 @@ async function drawEnhancedActivitiesTable(
     
     page.drawText(cleanText(entry.activityName), {
       x: columnX[1] + 8,
-      y: rowY - 5,
+      y: rowY - 8,
       size: 10,
       font: font,
       color: rgb(...styles.textColor),
@@ -369,7 +347,7 @@ async function drawEnhancedActivitiesTable(
     
     page.drawText(cleanText(`${entry.hours}h`), {
       x: columnX[2] + 8,
-      y: rowY - 5,
+      y: rowY - 8,
       size: 10,
       font: font,
       color: rgb(...styles.textColor),
@@ -377,92 +355,116 @@ async function drawEnhancedActivitiesTable(
     
     page.drawText(cleanText(`${Math.round(entry.cost).toLocaleString('fr-FR')}`), {
       x: columnX[3] + 8,
-      y: rowY - 5,
+      y: rowY - 8,
       size: 10,
       font: font,
       color: rgb(...styles.textColor),
     });
   });
   
-  return y - (data.timeEntries.length * 18);
+  // Ligne de total dans le tableau
+  const totalRowY = y - (data.timeEntries.length * 20);
+  
+  // Fond de la ligne de total
+  page.drawRectangle({
+    x: x,
+    y: totalRowY - 15,
+    width: tableWidth,
+    height: 18,
+    color: rgb(...styles.primaryColor),
+  });
+  
+  // Texte "TOTAL" en gras
+  page.drawText("TOTAL", {
+    x: columnX[0] + 8,
+    y: totalRowY - 8,
+    size: 10,
+    font: boldFont,
+    color: rgb(1, 1, 1),
+  });
+  
+  // Total des heures
+  page.drawText(cleanText(`${data.totalHours}h`), {
+    x: columnX[2] + 8,
+    y: totalRowY - 8,
+    size: 10,
+    font: boldFont,
+    color: rgb(1, 1, 1),
+  });
+  
+  // Total du coût
+  page.drawText(cleanText(`${Math.round(data.totalCalculatedCost).toLocaleString('fr-FR')} USD`), {
+    x: columnX[3] + 8,
+    y: totalRowY - 8,
+    size: 10,
+    font: boldFont,
+    color: rgb(1, 1, 1),
+  });
+  
+  // Calculer la hauteur totale utilisée par le tableau (incluant la ligne de total)
+  const tableHeight = 30 + 25 + ((data.timeEntries.length + 1) * 20) + 20; // titre + en-tête + lignes + ligne total + marge
+  return tableHeight;
 }
 
-async function drawStyledTotals(
-  page: PDFPage,
-  data: TimesheetData,
-  styles: PDFStyle,
-  x: number,
-  y: number,
-  font: PDFFont,
-  boldFont: PDFFont
-): Promise<void> {
-  // Fond de la section totaux
-  page.drawRectangle({
-    x: x - 10,
-    y: y + 10,
-    width: 300,
-    height: 60,
-    color: rgb(...styles.secondaryColor),
-    borderColor: rgb(...styles.accentColor),
-    borderWidth: 2,
-  });
-  
-  // Ligne de séparation stylisée
-  page.drawLine({
-    start: { x: x, y: y + 10 },
-    end: { x: x + 280, y: y + 10 },
-    thickness: 3,
-    color: rgb(...styles.accentColor),
-  });
-  
-  y -= 15;
-  
-  // Titre "TOTAUX"
-  page.drawText("TOTAUX", {
-    x: x,
-    y: y,
-    size: 16,
-    font: boldFont,
-    color: rgb(...styles.accentColor),
-  });
-  
-  y -= 25;
-  
-  // Grille des totaux
-  page.drawText("Total Heures:", {
-    x: x,
-    y: y,
-    size: 14,
-    font: boldFont,
-    color: rgb(...styles.textColor),
-  });
-  
-  page.drawText(cleanText(`${data.totalHours}h`), {
-    x: x + 150,
-    y: y,
-    size: 14,
-    font: boldFont,
-    color: rgb(...styles.accentColor),
-  });
-  
-  y -= 20;
-  
-  page.drawText("Total Coût:", {
-    x: x,
-    y: y,
-    size: 14,
-    font: boldFont,
-    color: rgb(...styles.textColor),
-  });
-  
-  page.drawText(cleanText(`${Math.round(data.totalCalculatedCost).toLocaleString('fr-FR')} USD`), {
-    x: x + 150,
-    y: y,
-    size: 14,
-    font: boldFont,
-    color: rgb(...styles.accentColor),
-  });
-}
+// Fonction non utilisée - commentée
+// async function drawStyledTotals(
+//   page: PDFPage,
+//   data: TimesheetData,
+//   styles: PDFStyle,
+//   x: number,
+//   y: number,
+//   font: PDFFont,
+//   boldFont: PDFFont
+// ): Promise<number> {
+//   // Titre "TOTAUX"
+//   page.drawText("TOTAUX", {
+//     x: x,
+//     y: y,
+//     size: 16,
+//     font: boldFont,
+//     color: rgb(...styles.accentColor),
+//   });
+//   
+//   y -= 25;
+//   
+//   // Grille des totaux
+//   page.drawText("Total Heures:", {
+//     x: x,
+//     y: y,
+//     size: 14,
+//     font: boldFont,
+//     color: rgb(...styles.textColor),
+//   });
+//   
+//   page.drawText(cleanText(`${data.totalHours}h`), {
+//     x: x + 150,
+//     y: y,
+//     size: 14,
+//     font: boldFont,
+//     color: rgb(...styles.accentColor),
+//   });
+//   
+//   y -= 20;
+//   
+//   page.drawText("Total Coût:", {
+//     x: x,
+//     y: y,
+//     size: 14,
+//     font: boldFont,
+//     color: rgb(...styles.textColor),
+//   });
+//   
+//   page.drawText(cleanText(`${Math.round(data.totalCalculatedCost).toLocaleString('fr-FR')} USD`), {
+//     x: x + 150,
+//     y: y,
+//     size: 14,
+//     font: boldFont,
+//     color: rgb(...styles.accentColor),
+//   });
+//   
+//   // Retourner la hauteur utilisée par la section totaux
+//   return 60;
+// }
 
 async function drawEnhancedSignature(
   page: PDFPage,
@@ -477,62 +479,50 @@ async function drawEnhancedSignature(
   font: PDFFont,
   boldFont: PDFFont
 ): Promise<void> {
-  // Fond de la section signature
-  page.drawRectangle({
-    x: x - 10,
-    y: y + 10,
-    width: 400,
-    height: 80,
-    color: rgb(0.95, 1, 0.95), // Vert très clair
-    borderColor: rgb(...styles.accentColor),
-    borderWidth: 2,
-  });
-  
-  page.drawText("SIGNATURE ÉLECTRONIQUE", {
+  // Texte "Signé électroniquement par" en vert
+  page.drawText("Signé électroniquement par", {
     x: x,
     y: y,
-    size: 16,
+    size: 10,
     font: boldFont,
-    color: rgb(...styles.accentColor),
+    color: rgb(0, 0.6, 0.4), // Vert PNUD
   });
   
-  y -= 25;
+  y -= 15;
   
-  page.drawText(cleanText(`Signé par: ${signatureInfo.signedBy}`), {
+  // Nom de la personne qui a signé
+  page.drawText(signatureInfo.signedBy, {
     x: x,
     y: y,
-    size: 12,
-    font: font,
-    color: rgb(...styles.textColor),
+    size: 10,
+    font: boldFont,
+    color: rgb(0, 0.6, 0.4), // Vert PNUD
   });
   
-  y -= 18;
+  y -= 15;
   
-  page.drawText(cleanText(`Date: ${signatureInfo.signedAt.toLocaleDateString('fr-FR')}`), {
-    x: x,
-    y: y,
-    size: 12,
-    font: font,
-    color: rgb(...styles.textColor),
+  // Date de signature
+  const signatureDate = signatureInfo.signedAt.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
   });
-  
-  y -= 18;
-  
-  page.drawText(cleanText(`Token: ${signatureInfo.signatureToken}`), {
+  page.drawText(`Le ${signatureDate}`, {
     x: x,
     y: y,
     size: 10,
     font: font,
-    color: rgb(0.5, 0.5, 0.5),
+    color: rgb(0, 0.6, 0.4), // Vert PNUD
   });
   
-  // Ligne de signature stylisée
-  y -= 20;
+  y -= 15;
+  
+  // Ligne de signature
   page.drawLine({
     start: { x: x, y: y },
-    end: { x: x + 300, y: y },
-    thickness: 2,
-    color: rgb(...styles.accentColor),
+    end: { x: x + 150, y: y },
+    thickness: 1,
+    color: rgb(0, 0.6, 0.4), // Vert PNUD
   });
 }
 
@@ -544,87 +534,59 @@ async function drawEnhancedSignaturePlaceholder(
   font: PDFFont,
   boldFont: PDFFont
 ): Promise<void> {
-  // Fond de la section signature
-  page.drawRectangle({
-    x: x - 10,
-    y: y + 10,
-    width: 400,
-    height: 80,
-    color: rgb(1, 0.95, 0.95), // Rouge très clair
-    borderColor: rgb(0.8, 0.2, 0.2),
-    borderWidth: 2,
-  });
-  
-  page.drawText("SIGNATURE REQUISE", {
-    x: x,
-    y: y,
-    size: 16,
-    font: boldFont,
-    color: rgb(0.8, 0.2, 0.2),
-  });
-  
-  y -= 25;
-  
+  // Texte "À signer électroniquement" en rouge
   page.drawText("À signer électroniquement", {
     x: x,
     y: y,
-    size: 12,
-    font: font,
-    color: rgb(0.6, 0.6, 0.6),
-  });
-  
-  y -= 18;
-  
-  page.drawText("Cliquez sur le lien de signature dans l'email", {
-    x: x,
-    y: y,
     size: 10,
-    font: font,
-    color: rgb(0.6, 0.6, 0.6),
+    font: boldFont,
+    color: rgb(0.8, 0.2, 0.2), // Rouge
   });
   
-  // Ligne de signature stylisée
-  y -= 20;
+  y -= 15;
+  
+  // Ligne de signature
   page.drawLine({
     start: { x: x, y: y },
-    end: { x: x + 300, y: y },
-    thickness: 2,
-    color: rgb(0.8, 0.2, 0.2),
+    end: { x: x + 150, y: y },
+    thickness: 1,
+    color: rgb(0.8, 0.2, 0.2), // Rouge
   });
 }
 
-async function drawStyledFooter(
-  page: PDFPage,
-  styles: PDFStyle,
-  x: number,
-  y: number,
-  font: PDFFont
-): Promise<void> {
-  // Fond du footer
-  page.drawRectangle({
-    x: 0,
-    y: 0,
-    width: 595.28,
-    height: 40,
-    color: rgb(...styles.primaryColor),
-  });
-  
-  page.drawText(cleanText("Document généré automatiquement par le système UNDP Digital Hub"), {
-    x: x,
-    y: y,
-    size: 9,
-    font: font,
-    color: rgb(1, 1, 1),
-  });
-  
-  page.drawText(cleanText(`Généré le: ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`), {
-    x: x + 300,
-    y: y,
-    size: 9,
-    font: font,
-    color: rgb(1, 1, 1),
-  });
-}
+// Fonction non utilisée - commentée
+// async function drawStyledFooter(
+//   page: PDFPage,
+//   styles: PDFStyle,
+//   x: number,
+//   y: number,
+//   font: PDFFont
+// ): Promise<void> {
+//   // Fond du footer
+//   page.drawRectangle({
+//     x: 0,
+//     y: 0,
+//     width: 595.28,
+//     height: 40,
+//     color: rgb(...styles.primaryColor),
+//   });
+//   
+//   page.drawText(cleanText("Document généré automatiquement par le système UNDP Digital Hub"), {
+//     x: x,
+//     y: y,
+//     size: 9,
+//     font: font,
+//     color: rgb(1, 1, 1),
+//   });
+//   
+//   page.drawText(cleanText(`Généré le: ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}`), {
+//     x: x + 300,
+//     y: y,
+//     size: 9,
+//     font: font,
+//     color: rgb(1, 1, 1),
+//   });
+// }
 
 // Fonction utilitaire pour créer un PDF avec signature
 export async function createSignedTimesheetPDF(
