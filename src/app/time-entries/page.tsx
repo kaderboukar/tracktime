@@ -1496,16 +1496,18 @@ export default function TimeEntriesPage() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation(); // Empêcher l'expansion du groupe
-                                      handleRequestSignature(userGroup.userId, userGroup.userName, semester, year);
+                                      if (!isCompleted && !isSent && !isLoading) {
+                                        handleRequestSignature(userGroup.userId, userGroup.userName, semester, year);
+                                      }
                                     }}
                                     disabled={isLoading || isSent || isCompleted}
                                     className={`flex items-center px-3 py-1.5 rounded-lg transition-all duration-200 shadow-sm text-xs font-medium ${
                                       isLoading 
                                         ? 'bg-orange-500 text-white cursor-wait' 
                                         : isSent 
-                                        ? 'bg-gray-500 text-white cursor-not-allowed opacity-75' 
+                                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed' 
                                         : isCompleted
-                                        ? 'bg-green-500 text-white cursor-not-allowed opacity-75'
+                                        ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
                                         : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 hover:shadow-md transform hover:-translate-y-0.5'
                                     }`}
                                     title={
@@ -1514,12 +1516,12 @@ export default function TimeEntriesPage() {
                                         : isSent 
                                         ? `Demande de signature envoyée pour ${userGroup.userName} (${semester} ${year})` 
                                         : isCompleted
-                                        ? `Feuille de temps déjà signée pour ${userGroup.userName} (${semester} ${year})`
+                                        ? `Feuille de temps déjà signée pour ${userGroup.userName} (${semester} ${year}) - Impossible de signer à nouveau`
                                         : `Faire signer la feuille de temps pour ${userGroup.userName} (${semester} ${year})`
                                     }
                                   >
                                     <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
-                                    {isLoading ? 'En cours...' : isSent ? 'Envoyé' : isCompleted ? 'Signé' : 'Faire Signer'}
+                                    {isLoading ? 'En cours...' : isSent ? 'Envoyé' : isCompleted ? 'Déjà Signé' : 'Faire Signer'}
                                   </button>
                                 ) : (
                                   <button
