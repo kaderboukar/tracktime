@@ -135,6 +135,10 @@ export default function TimeEntriesPage() {
   const [userRole, setUserRole] = useState<string>("");
   const [deleteTimeEntryId, setDeleteTimeEntryId] = useState<number | null>(null);
   const [selectedTimeEntry, setSelectedTimeEntry] = useState<TimeEntryWithDetails | null>(null);
+  
+  // États pour la gestion des signatures
+  const [signatureLoading, setSignatureLoading] = useState<Set<string>>(new Set());
+  const [sentSignatures, setSentSignatures] = useState<Set<string>>(new Set());
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -505,6 +509,19 @@ export default function TimeEntriesPage() {
     const total = calculateTotalHoursUsed(timeEntries);
     setTotalHoursUsed(Math.min(total, MAX_TOTAL_HOURS));
   }, [timeEntries]);
+
+  // Vérifier l'expiration des signatures toutes les 5 minutes
+  useEffect(() => {
+    const checkSignatureExpiration = () => {
+      // Pour l'instant, on réinitialise les signatures envoyées toutes les 5 minutes
+      // Dans une vraie implémentation, on vérifierait l'expiration réelle des tokens
+      setSentSignatures(new Set());
+    };
+
+    const interval = setInterval(checkSignatureExpiration, 5 * 60 * 1000); // 5 minutes
+    
+    return () => clearInterval(interval);
+  }, []);
 
   const getRemainingHours = () => {
     return Math.max(0, MAX_TOTAL_HOURS - totalHoursUsed);
@@ -1132,8 +1149,13 @@ export default function TimeEntriesPage() {
 
   // Fonction pour faire signer la feuille de temps (génère PDF + envoie email)
   const handleRequestSignature = async (userId: number, userName: string, semester: string, year: number) => {
+    const signatureKey = `${userId}-${year}-${semester}`;
+    
     try {
       console.log(`🚀 Démarrage de la demande de signature pour ${userName} (${semester} ${year})`);
+      
+      // Marquer comme en cours de chargement
+      setSignatureLoading(prev => new Set(prev).add(signatureKey));
       
       const token = localStorage.getItem("token");
       if (!token) {
@@ -1166,6 +1188,9 @@ export default function TimeEntriesPage() {
       console.log(`📡 Réponse de l'API:`, data);
       
       if (data.success) {
+        // Marquer comme envoyé avec succès
+        setSentSignatures(prev => new Set(prev).add(signatureKey));
+        
         showNotification(
           `✅ PDF généré et demande de signature envoyée avec succès pour ${userName}`,
           'success'
@@ -1179,6 +1204,13 @@ export default function TimeEntriesPage() {
       console.error("❌ Erreur lors de la demande de signature:", error);
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       showNotification(`Erreur lors de la demande de signature: ${errorMessage}`, 'error');
+    } finally {
+      // Retirer du chargement
+      setSignatureLoading(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(signatureKey);
+        return newSet;
+      });
     }
   };
 
@@ -1380,19 +1412,34 @@ export default function TimeEntriesPage() {
                                 const allApproved = userEntriesForPeriod.length > 0 && userEntriesForPeriod.every(entry => entry.status === 'APPROVED');
                                 console.log(`✅ ${userGroup.userName} - Toutes approuvées? ${allApproved}`);
                                 
+                                const signatureKey = `${userGroup.userId}-${year}-${semester}`;
+                                const isLoading = signatureLoading.has(signatureKey);
+                                const isSent = sentSignatures.has(signatureKey);
+                                
                                 return allApproved ? (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation(); // Empêcher l'expansion du groupe
                                       handleRequestSignature(userGroup.userId, userGroup.userName, semester, year);
                                     }}
-                                    className="flex items-center px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg
-                                             hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-sm hover:shadow-md
-                                             transform hover:-translate-y-0.5 text-xs font-medium"
-                                    title={`Faire signer la feuille de temps pour ${userGroup.userName} (${semester} ${year})`}
+                                    disabled={isLoading || isSent}
+                                    className={`flex items-center px-3 py-1.5 rounded-lg transition-all duration-200 shadow-sm text-xs font-medium ${
+                                      isLoading 
+                                        ? 'bg-orange-500 text-white cursor-wait' 
+                                        : isSent 
+                                        ? 'bg-gray-500 text-white cursor-not-allowed opacity-75' 
+                                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 hover:shadow-md transform hover:-translate-y-0.5'
+                                    }`}
+                                    title={
+                                      isLoading 
+                                        ? 'Envoi en cours...' 
+                                        : isSent 
+                                        ? `Demande de signature envoyée pour ${userGroup.userName} (${semester} ${year})` 
+                                        : `Faire signer la feuille de temps pour ${userGroup.userName} (${semester} ${year})`
+                                    }
                                   >
                                     <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
-                                    Faire Signer
+                                    {isLoading ? 'En cours...' : isSent ? 'Envoyé' : 'Faire Signer'}
                                   </button>
                                 ) : (
                                   <button

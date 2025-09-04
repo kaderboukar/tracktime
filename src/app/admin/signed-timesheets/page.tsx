@@ -37,22 +37,6 @@ interface SignedTimesheet {
   updatedAt: string;
 }
 
-interface DiagnosticResult {
-  id: number;
-  userId: number;
-  userName: string;
-  userEmail: string;
-  year: number;
-  semester: string;
-  signatureStatus: string;
-  hasSignedPdf: boolean;
-  issues: string[];
-  dataType?: string;
-  dataSize?: number;
-  pdfSignature?: string;
-  pdfEnd?: string;
-  isValid?: boolean;
-}
 
 export default function SignedTimesheetsPage() {
   const [signedTimesheets, setSignedTimesheets] = useState<SignedTimesheet[]>([]);
@@ -235,94 +219,6 @@ export default function SignedTimesheetsPage() {
               </div>
             </div>
 
-            {/* Boutons de diagnostic et test */}
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={async () => {
-                  try {
-                    const token = localStorage.getItem("token");
-                    const response = await fetch("/api/admin/signed-timesheets/diagnose", {
-                      headers: {
-                        Authorization: `Bearer ${token}`,
-                      },
-                    });
-
-                    if (!response.ok) {
-                      throw new Error(`Erreur lors du diagnostic: ${response.status}`);
-                    }
-
-                    const result = await response.json();
-                    if (result.success) {
-                      const { stats, diagnostics } = result.data;
-                      
-                      console.log("🔍 Diagnostic des PDFs signés:", result.data);
-                      
-                      // Afficher un résumé
-                      let message = `📊 Diagnostic terminé:\n`;
-                      message += `✅ PDFs valides: ${stats.valid}\n`;
-                      message += `❌ PDFs problématiques: ${stats.problematic}\n`;
-                      message += `📋 Total: ${stats.total}`;
-                      
-                      if (stats.problematic > 0) {
-                        message += `\n\n🚨 PROBLÈMES DÉTECTÉS:\n`;
-                        diagnostics.filter((d: DiagnosticResult) => !d.isValid).forEach((d: DiagnosticResult) => {
-                          message += `• ${d.userName} (ID: ${d.id}): ${d.issues.join(', ')}\n`;
-                        });
-                      }
-                      
-                      toast.success(message, {
-                        duration: 8000,
-                        description: "Vérifiez la console pour plus de détails"
-                      });
-                    } else {
-                      throw new Error(result.message);
-                    }
-                  } catch (error) {
-                    console.error("Erreur lors du diagnostic:", error);
-                    toast.error("Erreur lors du diagnostic des PDFs");
-                  }
-                }}
-                className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-lg hover:from-red-700 hover:to-pink-700 transition-all duration-200 shadow-md hover:shadow-lg"
-              >
-                🔍 Diagnostiquer
-              </button>
-
-              <button
-                onClick={async () => {
-                  try {
-                    const token = localStorage.getItem("token");
-                    const response = await fetch("/api/admin/signed-timesheets/test-pdf", {
-                      headers: {
-                        Authorization: `Bearer ${token}`,
-                      },
-                    });
-
-                    if (!response.ok) {
-                      throw new Error(`Erreur lors du test: ${response.status}`);
-                    }
-
-                    // Créer un blob et télécharger
-                    const blob = await response.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = "test_pdf_signature.pdf";
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-
-                    toast.success("Test PDF téléchargé avec succès ! Vérifiez qu'il s'ouvre correctement.");
-                  } catch (error) {
-                    console.error("Erreur lors du test PDF:", error);
-                    toast.error("Erreur lors du test PDF");
-                  }
-                }}
-                className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg"
-              >
-                🧪 Test PDF
-              </button>
-            </div>
           </div>
 
           {/* Filtres */}
