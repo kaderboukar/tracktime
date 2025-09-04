@@ -319,8 +319,8 @@ async function drawEnhancedActivitiesTable(
   
   // En-tête du tableau avec design amélioré - Format paysage avec plus d'espace
   const headerY = y;
-  const columnWidths = [tableWidth * 0.25, tableWidth * 0.35, tableWidth * 0.15, tableWidth * 0.15, tableWidth * 0.10];
-  const columnX = [x, x + columnWidths[0], x + columnWidths[0] + columnWidths[1], x + columnWidths[0] + columnWidths[1] + columnWidths[2], x + columnWidths[0] + columnWidths[1] + columnWidths[2] + columnWidths[3]];
+  const columnWidths = [tableWidth * 0.30, tableWidth * 0.40, tableWidth * 0.15, tableWidth * 0.15];
+  const columnX = [x, x + columnWidths[0], x + columnWidths[0] + columnWidths[1], x + columnWidths[0] + columnWidths[1] + columnWidths[2]];
   
   // Fond de l'en-tête avec dégradé
   page.drawRectangle({
