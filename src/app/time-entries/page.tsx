@@ -528,16 +528,29 @@ export default function TimeEntriesPage() {
   useEffect(() => {
     const checkCompletedSignaturesPeriodically = async () => {
       try {
-        const response = await fetch('/api/admin/signed-timesheets');
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        
+        const response = await fetch('/api/admin/signed-timesheets', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         if (response.ok) {
           const data = await response.json();
           const completedKeys = new Set<string>();
           
-          data.signedTimesheets?.forEach((timesheet: { userId: number; year: number; semester: string }) => {
-            const key = `${timesheet.userId}-${timesheet.year}-${timesheet.semester}`;
-            completedKeys.add(key);
+          console.log('🔍 Vérification des signatures complétées:', data);
+          
+          // L'API retourne data.data, pas data.signedTimesheets
+          data.data?.forEach((timesheet: { userId: number; year: number; semester: string; signatureStatus: string }) => {
+            // Seulement les signatures avec statut SIGNED
+            if (timesheet.signatureStatus === 'SIGNED') {
+              const key = `${timesheet.userId}-${timesheet.year}-${timesheet.semester}`;
+              completedKeys.add(key);
+              console.log(`✅ Signature complétée trouvée: ${key}`);
+            }
           });
           
+          console.log('📋 Signatures complétées détectées:', Array.from(completedKeys));
           setCompletedSignatures(completedKeys);
         }
       } catch (error) {
@@ -554,16 +567,29 @@ export default function TimeEntriesPage() {
   useEffect(() => {
     const checkCompletedSignatures = async () => {
       try {
-        const response = await fetch('/api/admin/signed-timesheets');
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        
+        const response = await fetch('/api/admin/signed-timesheets', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         if (response.ok) {
           const data = await response.json();
           const completedKeys = new Set<string>();
           
-          data.signedTimesheets?.forEach((timesheet: { userId: number; year: number; semester: string }) => {
-            const key = `${timesheet.userId}-${timesheet.year}-${timesheet.semester}`;
-            completedKeys.add(key);
+          console.log('🔍 Vérification initiale des signatures complétées:', data);
+          
+          // L'API retourne data.data, pas data.signedTimesheets
+          data.data?.forEach((timesheet: { userId: number; year: number; semester: string; signatureStatus: string }) => {
+            // Seulement les signatures avec statut SIGNED
+            if (timesheet.signatureStatus === 'SIGNED') {
+              const key = `${timesheet.userId}-${timesheet.year}-${timesheet.semester}`;
+              completedKeys.add(key);
+              console.log(`✅ Signature complétée trouvée au chargement: ${key}`);
+            }
           });
           
+          console.log('📋 Signatures complétées détectées au chargement:', Array.from(completedKeys));
           setCompletedSignatures(completedKeys);
         }
       } catch (error) {
@@ -1251,14 +1277,20 @@ export default function TimeEntriesPage() {
         // Vérifier si la signature est déjà complétée (cas rare mais possible)
         setTimeout(async () => {
           try {
-            const checkResponse = await fetch('/api/admin/signed-timesheets');
+            const token = localStorage.getItem("token");
+            if (!token) return;
+            
+            const checkResponse = await fetch('/api/admin/signed-timesheets', {
+              headers: { Authorization: `Bearer ${token}` }
+            });
             if (checkResponse.ok) {
               const checkData = await checkResponse.json();
-              const isAlreadyCompleted = checkData.signedTimesheets?.some((timesheet: { userId: number; year: number; semester: string }) => 
-                `${timesheet.userId}-${timesheet.year}-${timesheet.semester}` === signatureKey
+              const isAlreadyCompleted = checkData.data?.some((timesheet: { userId: number; year: number; semester: string; signatureStatus: string }) => 
+                `${timesheet.userId}-${timesheet.year}-${timesheet.semester}` === signatureKey && timesheet.signatureStatus === 'SIGNED'
               );
               
               if (isAlreadyCompleted) {
+                console.log(`🎉 Signature déjà complétée détectée pour ${signatureKey}`);
                 setCompletedSignatures(prev => new Set(prev).add(signatureKey));
                 setSentSignatures(prev => {
                   const newSet = new Set(prev);
@@ -1491,6 +1523,15 @@ export default function TimeEntriesPage() {
                                 const isLoading = signatureLoading.has(signatureKey);
                                 const isSent = sentSignatures.has(signatureKey);
                                 const isCompleted = completedSignatures.has(signatureKey);
+                                
+                                // Logs de débogage
+                                console.log(`🔍 État du bouton pour ${userGroup.userName} (${signatureKey}):`, {
+                                  isLoading,
+                                  isSent,
+                                  isCompleted,
+                                  allApproved,
+                                  completedSignatures: Array.from(completedSignatures)
+                                });
                                 
                                 return allApproved ? (
                                   <button
