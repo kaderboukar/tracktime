@@ -11,6 +11,7 @@ export interface TimesheetData {
   semester: string;
   timeEntries: Array<{
     projectName: string;
+    projectNumber?: string;
     activityName: string;
     hours: number;
     cost: number;
@@ -45,6 +46,37 @@ function cleanText(text: unknown): string {
   return String(text).replace(/[^\x00-\x7F]/g, '').trim();
 }
 
+// Fonction pour diviser le texte en plusieurs lignes
+function wrapText(text: string, maxWidth: number, font: PDFFont, fontSize: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    const textWidth = font.widthOfTextAtSize(testLine, fontSize);
+    
+    if (textWidth <= maxWidth) {
+      currentLine = testLine;
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        // Si même un seul mot est trop long, on le coupe
+        lines.push(word);
+        currentLine = '';
+      }
+    }
+  }
+  
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+  
+  return lines;
+}
+
 export async function generateTimesheetPDFWithPDFMaker(
   timesheetData: TimesheetData,
   styles: PDFStyle = PNUD_STYLES
@@ -53,8 +85,8 @@ export async function generateTimesheetPDFWithPDFMaker(
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
   
-  // Ajouter une page A4 portrait
-  const page = pdfDoc.addPage([595.28, 841.89]);
+  // Ajouter une page A4 paysage
+  const page = pdfDoc.addPage([841.89, 595.28]);
   const { width, height } = page.getSize();
   
   // Charger les polices
@@ -86,9 +118,9 @@ export async function generateTimesheetPDFWithPDFMaker(
   currentY -= tableHeight + 30;
   
   // === SECTION SIGNATURE EN BAS À DROITE ===
-  // Positionner la signature en bas à droite de la page
+  // Positionner la signature en bas à droite de la page (format paysage)
   const signatureX = margin + contentWidth - 200; // 200px de largeur pour la signature
-  const signatureY = margin + 80; // 80px du bas de la page
+  const signatureY = margin + 60; // 60px du bas de la page (ajusté pour paysage)
   
   if (timesheetData.signatureInfo) {
     await drawEnhancedSignature(page, timesheetData.signatureInfo, styles, signatureX, signatureY, font, boldFont);
@@ -285,10 +317,10 @@ async function drawEnhancedActivitiesTable(
   // Pas de titre de section - aller directement au tableau
   y -= 10;
   
-  // En-tête du tableau avec design amélioré
+  // En-tête du tableau avec design amélioré - Format paysage avec plus d'espace
   const headerY = y;
-  const columnWidths = [tableWidth * 0.35, tableWidth * 0.35, tableWidth * 0.15, tableWidth * 0.15];
-  const columnX = [x, x + columnWidths[0], x + columnWidths[0] + columnWidths[1], x + columnWidths[0] + columnWidths[1] + columnWidths[2]];
+  const columnWidths = [tableWidth * 0.25, tableWidth * 0.35, tableWidth * 0.15, tableWidth * 0.15, tableWidth * 0.10];
+  const columnX = [x, x + columnWidths[0], x + columnWidths[0] + columnWidths[1], x + columnWidths[0] + columnWidths[1] + columnWidths[2], x + columnWidths[0] + columnWidths[1] + columnWidths[2] + columnWidths[3]];
   
   // Fond de l'en-tête avec dégradé
   page.drawRectangle({
@@ -300,7 +332,7 @@ async function drawEnhancedActivitiesTable(
   });
   
   // Texte de l'en-tête
-  const headers = ["Projet", "Activité", "Heures", "Coût (USD)"];
+  const headers = ["Projet", "Activité", "Heures", "Coût (USD)", "Total"];
   headers.forEach((header, index) => {
     page.drawText(header, {
       x: columnX[index] + 8,
@@ -313,49 +345,83 @@ async function drawEnhancedActivitiesTable(
   
   y -= 45;
   
-  // Lignes de données avec design alterné et espacement amélioré
+  // Calculer la hauteur maximale nécessaire pour toutes les lignes
+  let maxRowHeight = 0;
+  const rowHeights: number[] = [];
+  
+  // Première passe : calculer la hauteur de chaque ligne
+  data.timeEntries.forEach((entry) => {
+    const projectText = entry.projectNumber 
+      ? `${entry.projectNumber} - ${entry.projectName}`
+      : entry.projectName;
+    
+    const projectLines = wrapText(cleanText(projectText), columnWidths[0] - 16, font, 10);
+    const activityLines = wrapText(cleanText(entry.activityName), columnWidths[1] - 16, font, 10);
+    
+    const rowHeight = Math.max(projectLines.length, activityLines.length) * 12 + 8; // 12px par ligne + 8px de padding
+    rowHeights.push(rowHeight);
+    maxRowHeight = Math.max(maxRowHeight, rowHeight);
+  });
+  
+  // Deuxième passe : dessiner les lignes avec les bonnes hauteurs
   data.timeEntries.forEach((entry, index) => {
-    const rowY = y - (index * 20);
+    const rowY = y - (rowHeights.slice(0, index).reduce((sum, h) => sum + h, 0));
+    const currentRowHeight = rowHeights[index];
     
     // Alternance de couleurs pour les lignes
     const rowColor = index % 2 === 0 ? rgb(...styles.secondaryColor) : rgb(1, 1, 1);
     
     page.drawRectangle({
       x: x,
-      y: rowY - 15,
+      y: rowY - currentRowHeight,
       width: tableWidth,
-      height: 18,
+      height: currentRowHeight,
       color: rowColor,
     });
     
-    // Données de la ligne
-    page.drawText(cleanText(entry.projectName), {
-      x: columnX[0] + 8,
-      y: rowY - 8,
-      size: 10,
-      font: font,
-      color: rgb(...styles.textColor),
+    // Données de la ligne avec retour à la ligne
+    const projectText = entry.projectNumber 
+      ? `${entry.projectNumber} - ${entry.projectName}`
+      : entry.projectName;
+    
+    const projectLines = wrapText(cleanText(projectText), columnWidths[0] - 16, font, 10);
+    const activityLines = wrapText(cleanText(entry.activityName), columnWidths[1] - 16, font, 10);
+    
+    // Dessiner les lignes du projet
+    projectLines.forEach((line, lineIndex) => {
+      page.drawText(line, {
+        x: columnX[0] + 8,
+        y: rowY - 8 - (lineIndex * 12),
+        size: 10,
+        font: font,
+        color: rgb(...styles.textColor),
+      });
     });
     
-    page.drawText(cleanText(entry.activityName), {
-      x: columnX[1] + 8,
-      y: rowY - 8,
-      size: 10,
-      font: font,
-      color: rgb(...styles.textColor),
+    // Dessiner les lignes de l'activité
+    activityLines.forEach((line, lineIndex) => {
+      page.drawText(line, {
+        x: columnX[1] + 8,
+        y: rowY - 8 - (lineIndex * 12),
+        size: 10,
+        font: font,
+        color: rgb(...styles.textColor),
+      });
     });
     
+    // Heures (centré verticalement)
     page.drawText(cleanText(`${entry.hours}h`), {
       x: columnX[2] + 8,
-      y: rowY - 8,
+      y: rowY - 8 - (currentRowHeight / 2) + 5,
       size: 10,
       font: font,
       color: rgb(...styles.textColor),
     });
     
+    // Coût (centré verticalement)
     page.drawText(cleanText(`${Math.round(entry.cost).toLocaleString('fr-FR')}`), {
       x: columnX[3] + 8,
-      y: rowY - 8,
+      y: rowY - 8 - (currentRowHeight / 2) + 5,
       size: 10,
       font: font,
       color: rgb(...styles.textColor),
@@ -363,21 +429,22 @@ async function drawEnhancedActivitiesTable(
   });
   
   // Ligne de total dans le tableau
-  const totalRowY = y - (data.timeEntries.length * 20);
+  const totalRowY = y - (rowHeights.reduce((sum, h) => sum + h, 0));
+  const totalRowHeight = 25;
   
   // Fond de la ligne de total
   page.drawRectangle({
     x: x,
-    y: totalRowY - 15,
+    y: totalRowY - totalRowHeight,
     width: tableWidth,
-    height: 18,
+    height: totalRowHeight,
     color: rgb(...styles.primaryColor),
   });
   
   // Texte "TOTAL" en gras
   page.drawText("TOTAL", {
     x: columnX[0] + 8,
-    y: totalRowY - 8,
+    y: totalRowY - 15,
     size: 10,
     font: boldFont,
     color: rgb(1, 1, 1),
@@ -386,7 +453,7 @@ async function drawEnhancedActivitiesTable(
   // Total des heures
   page.drawText(cleanText(`${data.totalHours}h`), {
     x: columnX[2] + 8,
-    y: totalRowY - 8,
+    y: totalRowY - 15,
     size: 10,
     font: boldFont,
     color: rgb(1, 1, 1),
@@ -395,15 +462,15 @@ async function drawEnhancedActivitiesTable(
   // Total du coût
   page.drawText(cleanText(`${Math.round(data.totalCalculatedCost).toLocaleString('fr-FR')} USD`), {
     x: columnX[3] + 8,
-    y: totalRowY - 8,
+    y: totalRowY - 15,
     size: 10,
     font: boldFont,
     color: rgb(1, 1, 1),
   });
   
-  // Calculer la hauteur totale utilisée par le tableau (incluant la ligne de total)
-  const tableHeight = 30 + 25 + ((data.timeEntries.length + 1) * 20) + 20; // titre + en-tête + lignes + ligne total + marge
-  return tableHeight;
+  // Calculer la hauteur totale utilisée par le tableau
+  const totalTableHeight = 30 + 25 + rowHeights.reduce((sum, h) => sum + h, 0) + totalRowHeight + 20;
+  return totalTableHeight;
 }
 
 // Fonction non utilisée - commentée

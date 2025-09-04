@@ -139,6 +139,7 @@ export default function TimeEntriesPage() {
   // États pour la gestion des signatures
   const [signatureLoading, setSignatureLoading] = useState<Set<string>>(new Set());
   const [sentSignatures, setSentSignatures] = useState<Set<string>>(new Set());
+  const [completedSignatures, setCompletedSignatures] = useState<Set<string>>(new Set());
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -521,6 +522,56 @@ export default function TimeEntriesPage() {
     const interval = setInterval(checkSignatureExpiration, 5 * 60 * 1000); // 5 minutes
     
     return () => clearInterval(interval);
+  }, []);
+
+  // Vérifier les signatures complétées toutes les 30 secondes
+  useEffect(() => {
+    const checkCompletedSignaturesPeriodically = async () => {
+      try {
+        const response = await fetch('/api/admin/signed-timesheets');
+        if (response.ok) {
+          const data = await response.json();
+          const completedKeys = new Set<string>();
+          
+          data.signedTimesheets?.forEach((timesheet: { userId: number; year: number; semester: string }) => {
+            const key = `${timesheet.userId}-${timesheet.year}-${timesheet.semester}`;
+            completedKeys.add(key);
+          });
+          
+          setCompletedSignatures(completedKeys);
+        }
+      } catch (error) {
+        console.error('Erreur lors de la vérification périodique des signatures complétées:', error);
+      }
+    };
+
+    const interval = setInterval(checkCompletedSignaturesPeriodically, 30 * 1000); // 30 secondes
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // Vérifier les signatures complétées au chargement de la page
+  useEffect(() => {
+    const checkCompletedSignatures = async () => {
+      try {
+        const response = await fetch('/api/admin/signed-timesheets');
+        if (response.ok) {
+          const data = await response.json();
+          const completedKeys = new Set<string>();
+          
+          data.signedTimesheets?.forEach((timesheet: { userId: number; year: number; semester: string }) => {
+            const key = `${timesheet.userId}-${timesheet.year}-${timesheet.semester}`;
+            completedKeys.add(key);
+          });
+          
+          setCompletedSignatures(completedKeys);
+        }
+      } catch (error) {
+        console.error('Erreur lors de la vérification des signatures complétées:', error);
+      }
+    };
+
+    checkCompletedSignatures();
   }, []);
 
   const getRemainingHours = () => {
@@ -1196,6 +1247,30 @@ export default function TimeEntriesPage() {
           'success'
         );
         console.log(`🎉 Signature demandée avec succès pour ${userName}`);
+        
+        // Vérifier si la signature est déjà complétée (cas rare mais possible)
+        setTimeout(async () => {
+          try {
+            const checkResponse = await fetch('/api/admin/signed-timesheets');
+            if (checkResponse.ok) {
+              const checkData = await checkResponse.json();
+              const isAlreadyCompleted = checkData.signedTimesheets?.some((timesheet: { userId: number; year: number; semester: string }) => 
+                `${timesheet.userId}-${timesheet.year}-${timesheet.semester}` === signatureKey
+              );
+              
+              if (isAlreadyCompleted) {
+                setCompletedSignatures(prev => new Set(prev).add(signatureKey));
+                setSentSignatures(prev => {
+                  const newSet = new Set(prev);
+                  newSet.delete(signatureKey);
+                  return newSet;
+                });
+              }
+            }
+          } catch (error) {
+            console.error('Erreur lors de la vérification post-envoi:', error);
+          }
+        }, 1000);
       } else {
         console.error(`❌ Erreur dans la réponse:`, data.message);
         showNotification(data.message || "Erreur lors de l'envoi de la demande de signature", 'error');
@@ -1415,6 +1490,7 @@ export default function TimeEntriesPage() {
                                 const signatureKey = `${userGroup.userId}-${year}-${semester}`;
                                 const isLoading = signatureLoading.has(signatureKey);
                                 const isSent = sentSignatures.has(signatureKey);
+                                const isCompleted = completedSignatures.has(signatureKey);
                                 
                                 return allApproved ? (
                                   <button
@@ -1422,12 +1498,14 @@ export default function TimeEntriesPage() {
                                       e.stopPropagation(); // Empêcher l'expansion du groupe
                                       handleRequestSignature(userGroup.userId, userGroup.userName, semester, year);
                                     }}
-                                    disabled={isLoading || isSent}
+                                    disabled={isLoading || isSent || isCompleted}
                                     className={`flex items-center px-3 py-1.5 rounded-lg transition-all duration-200 shadow-sm text-xs font-medium ${
                                       isLoading 
                                         ? 'bg-orange-500 text-white cursor-wait' 
                                         : isSent 
                                         ? 'bg-gray-500 text-white cursor-not-allowed opacity-75' 
+                                        : isCompleted
+                                        ? 'bg-green-500 text-white cursor-not-allowed opacity-75'
                                         : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 hover:shadow-md transform hover:-translate-y-0.5'
                                     }`}
                                     title={
@@ -1435,11 +1513,13 @@ export default function TimeEntriesPage() {
                                         ? 'Envoi en cours...' 
                                         : isSent 
                                         ? `Demande de signature envoyée pour ${userGroup.userName} (${semester} ${year})` 
+                                        : isCompleted
+                                        ? `Feuille de temps déjà signée pour ${userGroup.userName} (${semester} ${year})`
                                         : `Faire signer la feuille de temps pour ${userGroup.userName} (${semester} ${year})`
                                     }
                                   >
                                     <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
-                                    {isLoading ? 'En cours...' : isSent ? 'Envoyé' : 'Faire Signer'}
+                                    {isLoading ? 'En cours...' : isSent ? 'Envoyé' : isCompleted ? 'Signé' : 'Faire Signer'}
                                   </button>
                                 ) : (
                                   <button
