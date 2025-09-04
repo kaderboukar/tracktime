@@ -129,10 +129,23 @@ export async function POST(request: NextRequest) {
     });
     
     // Générer le PDF
+    console.log("🎨 Début de la génération du PDF...");
+    const { generateTimesheetPDF } = await import('@/lib/pdf-maker-generator');
+    console.log("📄 Générateur PDF importé avec succès");
+    
     const pdfBuffer = await generateTimesheetPDF(timesheetData);
+    console.log(`✅ PDF généré avec succès: ${pdfBuffer.length} bytes`);
+    
+    // Convertir Uint8Array en ArrayBuffer pour l'email
+    console.log("🔄 Conversion du buffer PDF...");
+    const pdfArrayBuffer = pdfBuffer.buffer.slice(pdfBuffer.byteOffset, pdfBuffer.byteOffset + pdfBuffer.byteLength) as ArrayBuffer;
+    console.log(`✅ Buffer converti: ${pdfArrayBuffer.byteLength} bytes`);
     
     // Envoyer l'email avec le PDF et le lien de signature
+    console.log("📧 Début de l'envoi de l'email...");
     const { sendTimesheetSignatureEmail } = await import('@/lib/signature-email');
+    console.log("📨 Module email importé avec succès");
+    
     const emailSent = await sendTimesheetSignatureEmail({
       userName: staffUser.name,
       userEmail: staffUser.email,
@@ -141,7 +154,7 @@ export async function POST(request: NextRequest) {
       signatureToken,
       totalHours,
       totalCalculatedCost: Math.round(totalCalculatedCost),
-      pdfBuffer
+      pdfBuffer: pdfArrayBuffer
     });
 
     return NextResponse.json({
@@ -161,120 +174,29 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error("Erreur lors de la génération automatique:", error);
+    console.error("❌ Erreur lors de la génération automatique:", error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    const errorStack = error instanceof Error ? error.stack : 'Pas de stack trace';
+    
+    console.error("📊 Détails de l'erreur:", {
+      userId,
+      year,
+      semester,
+      errorMessage,
+      errorStack
+    });
+    
     return NextResponse.json(
-      { success: false, message: "Erreur lors de la génération automatique" },
+      { 
+        success: false, 
+        message: "Erreur lors de la génération automatique",
+        details: errorMessage,
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     );
   }
-}
-
-// Fonction pour générer le PDF de feuille de temps
-async function generateTimesheetPDF(timesheetData: {
-  userName: string;
-  userGrade?: string;
-  userProformaCost: number;
-  totalHours: number;
-  totalCalculatedCost: number;
-  year: number;
-  semester: string;
-  timeEntries: Array<{
-    projectName: string;
-    activityName: string;
-    hours: number;
-    cost: number;
-  }>;
-}) {
-  const jsPDF = (await import('jspdf')).default;
-  const autoTable = await import('jspdf-autotable');
-  
-  const doc = new jsPDF({
-    orientation: 'landscape',
-    unit: 'mm',
-    format: 'a4'
-  });
-
-  // Logo PNUD - Temporairement désactivé pour éviter l'erreur PNG
-  // TODO: Convertir le logo en base64 et l'ajouter ici
-  // doc.addImage(logoBase64, "PNG", 250, 18, 25, 35);
-
-  // En-tête
-  doc.setFontSize(20);
-  doc.setTextColor(66, 139, 202);
-  doc.text("FICHE DE TEMPS - STAFF", 148, 50, { align: "center" });
-
-  // Informations de l'employé
-  doc.setFontSize(12);
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(10);
-  doc.text(`Nom: ${timesheetData.userName}`, 20, 70);
-  doc.text(`Grade: ${timesheetData.userGrade || "N/A"}`, 20, 75);
-  doc.text(`Période: ${timesheetData.year} - ${timesheetData.semester}`, 20, 80);
-  doc.text(`Coût Proforma Annuel: ${timesheetData.userProformaCost.toLocaleString('fr-FR')} USD`, 20, 85);
-
-  // Préparer les données pour le tableau
-  const tableData: string[][] = [];
-  timesheetData.timeEntries.forEach((entry) => {
-    tableData.push([
-      entry.projectName,
-      entry.activityName,
-      `${entry.hours}h`,
-      `${Math.round(entry.cost).toLocaleString('fr-FR')} USD`
-    ]);
-  });
-
-  // Ajouter le tableau
-  autoTable.default(doc, {
-    startY: 100,
-    head: [['Projet', 'Activité', 'Heures', 'Coût Calculé']],
-    body: tableData,
-    foot: [
-      ['Total', '', `${timesheetData.totalHours}h`, `${Math.round(timesheetData.totalCalculatedCost).toLocaleString('fr-FR')} USD`]
-    ],
-    theme: 'grid',
-    styles: {
-      fontSize: 10,
-      cellPadding: 5,
-    },
-    headStyles: {
-      fillColor: [66, 139, 202],
-      textColor: 255,
-      fontStyle: 'bold',
-    },
-    footStyles: {
-      fillColor: [240, 240, 240],
-      textColor: 0,
-      fontStyle: 'bold',
-    },
-    columnStyles: {
-      0: { cellWidth: 75 },
-      1: { cellWidth: 90 },
-      2: { cellWidth: 35 },
-      3: { cellWidth: 50 },
-    },
-    margin: { left: 20, right: 20 },
-  });
-
-  // Date et signature
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tableEndY = (doc as any).lastAutoTable?.finalY || 180;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pageHeight = (doc as any).internal.pageSize.height;
-  const signatureY = Math.max(tableEndY + 20, pageHeight - 30);
-
-  doc.setFontSize(10);
-  const currentDate = new Date();
-  const formattedDate = currentDate.toLocaleDateString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  });
-  doc.text(`Date: ${formattedDate}`, 20, signatureY);
-  doc.text("Signature:", 200, signatureY);
-  doc.line(200, signatureY + 5, 277, signatureY + 5);
-
-  // Retourner le PDF comme buffer
-  return doc.output('arraybuffer');
 }
 
 

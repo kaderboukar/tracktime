@@ -10,7 +10,9 @@ import ViewTimeEntryModal from "@/components/ViewTimeEntryModal";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import CreateTimeEntryModal from "@/components/CreateTimeEntryModal";
 import RoleBasedProtectedRoute from "@/components/RoleBasedProtectedRoute";
-import GenerateTimesheetModal from "@/components/GenerateTimesheetModal";
+
+
+
 
 const getStatusBadgeClass = (status: string) => {
   switch (status) {
@@ -135,11 +137,9 @@ export default function TimeEntriesPage() {
   const [selectedTimeEntry, setSelectedTimeEntry] = useState<TimeEntryWithDetails | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isGenerateTimesheetModalOpen, setIsGenerateTimesheetModalOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [selectedUserForTimesheet, setSelectedUserForTimesheet] = useState<{ id: number; name: string } | null>(null);
   const [activePeriod, setActivePeriod] = useState<{ year: number; semester: "S1" | "S2" } | null>(null);
-  const [availablePeriods, setAvailablePeriods] = useState<Array<{ year: number; semester: "S1" | "S2"; isActive: boolean }>>([]);
+  // const [availablePeriods, setAvailablePeriods] = useState<Array<{ year: number; semester: "S1" | "S2"; isActive: boolean }>>([]);
   const router = useRouter();
   const [remainingHours, setRemainingHours] = useState<number>(480);
   const [currentYear] = useState(new Date().getFullYear());
@@ -845,7 +845,7 @@ export default function TimeEntriesPage() {
           }
           
           // Stocker toutes les périodes disponibles
-          setAvailablePeriods(result.data);
+          // setAvailablePeriods(result.data);
         }
       }
     } catch (error) {
@@ -1080,43 +1080,105 @@ export default function TimeEntriesPage() {
     }
   };
 
-  // Fonction pour ouvrir le modal de génération de feuille de temps
-  const openGenerateTimesheetModal = (userId: number, userName: string) => {
-    setSelectedUserForTimesheet({ id: userId, name: userName });
-    setIsGenerateTimesheetModalOpen(true);
-  };
+  // Fonction pour vérifier si toutes les entrées d'un utilisateur sont approuvées (non utilisée actuellement)
+  // const areAllEntriesApproved = async (userId: number, semester: string, year: number) => {
+  //   try {
+  //     console.log(`🔍 Vérification pour userId: ${userId}, semester: ${semester}, year: ${year}`);
+      
+  //     const token = localStorage.getItem("token");
+  //     if (!token) {
+  //       console.error("Token non trouvé");
+  //       return false;
+  //     }
+      
+  //     // Appel direct à l'API pour vérifier le statut
+  //     const res = await fetch(`/api/time-entries?userId=${userId}&semester=${semester}&year=${year}`, {
+  //       headers: { Authorization: `Bearer ${token}` },
+  //     });
+      
+  //     if (!res.ok) {
+  //       console.error("Erreur lors de la vérification des entrées:", res.status);
+  //       return false;
+  //     }
+      
+  //     const data = await res.json();
+      
+  //     if (data.success && Array.isArray(data.data)) {
+  //       const userEntries = data.data;
+  //       console.log(`📋 Entrées trouvées pour cet utilisateur: ${userEntries.length}`);
+        
+  //       userEntries.forEach(entry => {
+  //         console.log(`  - Entry ID: ${entry.id}, Status: ${entry.status || 'PENDING'}, UserId: ${entry.userId}, Semester: ${entry.semester}, Year: ${entry.year}`);
+  //       });
+        
+  //       if (userEntries.length === 0) {
+  //         console.log(`❌ Aucune entrée trouvée pour cet utilisateur`);
+  //         return false;
+  //       }
+        
+  //       const allApproved = userEntries.every(entry => entry.status === 'APPROVED');
+  //       console.log(`✅ Toutes les entrées sont-elles approuvées? ${allApproved}`);
+        
+  //       return allApproved;
+  //     } else {
+  //       console.error("Format de données invalide:", data);
+  //       return false;
+  //     }
+  //   } catch (error) {
+  //     console.error("Erreur lors de la vérification:", error);
+  //     return false;
+  //   }
+  // };
 
-  // Fonction pour générer automatiquement la feuille de temps
-  const handleGenerateTimesheet = async (year: number, semester: string) => {
-    if (!selectedUserForTimesheet) return;
-    
+  // Fonction pour faire signer la feuille de temps (génère PDF + envoie email)
+  const handleRequestSignature = async (userId: number, userName: string, semester: string, year: number) => {
     try {
+      console.log(`🚀 Démarrage de la demande de signature pour ${userName} (${semester} ${year})`);
+      
       const token = localStorage.getItem("token");
-      const res = await fetch("/api/timesheet/auto-generate", {
+      if (!token) {
+        throw new Error("Token d'authentification non trouvé");
+      }
+      
+      // Utiliser directement l'API auto-generate qui fait tout : PDF + email
+      console.log(`📧 Envoi de la demande via /api/timesheet/auto-generate...`);
+      
+      const response = await fetch("/api/timesheet/auto-generate", {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          userId: selectedUserForTimesheet.id,
+          userId,
           year,
           semester,
         }),
       });
 
-      const data = await res.json();
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ Erreur API: ${response.status} - ${errorText}`);
+        throw new Error(`Erreur serveur: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`📡 Réponse de l'API:`, data);
+      
       if (data.success) {
         showNotification(
-          `Feuille de temps générée et envoyée avec succès pour ${data.data.userName}`,
+          `✅ PDF généré et demande de signature envoyée avec succès pour ${userName}`,
           'success'
         );
+        console.log(`🎉 Signature demandée avec succès pour ${userName}`);
       } else {
-        showNotification(data.message || "Erreur lors de la génération", 'error');
+        console.error(`❌ Erreur dans la réponse:`, data.message);
+        showNotification(data.message || "Erreur lors de l'envoi de la demande de signature", 'error');
       }
     } catch (error) {
-      console.error("Erreur lors de la génération de la feuille de temps:", error);
-      showNotification("Erreur lors de la génération de la feuille de temps", 'error');
+      console.error("❌ Erreur lors de la demande de signature:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      showNotification(`Erreur lors de la demande de signature: ${errorMessage}`, 'error');
     }
   };
 
@@ -1268,21 +1330,82 @@ export default function TimeEntriesPage() {
                         
                         {/* Bouton d'expansion */}
                         <div className="flex items-center space-x-2">
-                          {/* Bouton Générer Feuille de Temps pour ADMIN/PMSU */}
+                          {/* Bouton Faire Signer pour ADMIN/PMSU - seulement si toutes les entrées sont approuvées */}
                           {["ADMIN", "PMSU"].includes(userRole) && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation(); // Empêcher l'expansion du groupe
-                                openGenerateTimesheetModal(userGroup.userId, userGroup.userName);
-                              }}
-                              className="flex items-center px-3 py-1.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg
-                                       hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-sm hover:shadow-md
-                                       transform hover:-translate-y-0.5 text-xs font-medium"
-                              title={`Générer la feuille de temps pour ${userGroup.userName}`}
-                            >
-                              <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
-                              Feuille de Temps
-                            </button>
+                            <>
+                              {/* Vérifier si toutes les entrées sont approuvées pour ce semestre */}
+                              {(() => {
+                                // Extraire semester et year des entrées de l'utilisateur
+                                const userEntries = timeEntries.filter(entry => entry.userId === userGroup.userId);
+                                
+                                if (userEntries.length === 0) {
+                                  console.log(`❌ Aucune entrée trouvée pour ${userGroup.userName}`);
+                                  return (
+                                    <button
+                                      disabled
+                                      className="flex items-center px-3 py-1.5 bg-gray-400 text-white rounded-lg cursor-not-allowed text-xs font-medium opacity-50"
+                                      title="Aucune entrée trouvée"
+                                    >
+                                      <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
+                                      Aucune entrée
+                                    </button>
+                                  );
+                                }
+                                
+                                // Prendre le premier semester/year trouvé (ou utiliser les plus récents)
+                                const latestEntry = userEntries.reduce((latest, current) => {
+                                  if (!latest) return current;
+                                  if (current.year > latest.year) return current;
+                                  if (current.year === latest.year && current.semester === 'S2' && latest.semester === 'S1') return current;
+                                  return latest;
+                                });
+                                
+                                const semester = latestEntry.semester;
+                                const year = latestEntry.year;
+                                
+                                console.log(`🔍 Vérification pour ${userGroup.userName} (${userGroup.userId}, ${semester} ${year})`);
+                                console.log(`📊 Total timeEntries disponibles: ${timeEntries.length}`);
+                                
+                                // Filtrer par semester et year
+                                const userEntriesForPeriod = userEntries.filter(entry => 
+                                  entry.semester === semester && 
+                                  entry.year === year
+                                );
+                                
+                                console.log(`📋 Entrées trouvées pour ${userGroup.userName} (${semester} ${year}): ${userEntriesForPeriod.length}`);
+                                userEntriesForPeriod.forEach(entry => {
+                                  console.log(`  - Entry ID: ${entry.id}, Status: ${entry.status || 'PENDING'}, UserId: ${entry.userId}, Semester: ${entry.semester}, Year: ${entry.year}`);
+                                });
+                                
+                                const allApproved = userEntriesForPeriod.length > 0 && userEntriesForPeriod.every(entry => entry.status === 'APPROVED');
+                                console.log(`✅ ${userGroup.userName} - Toutes approuvées? ${allApproved}`);
+                                
+                                return allApproved ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation(); // Empêcher l'expansion du groupe
+                                      handleRequestSignature(userGroup.userId, userGroup.userName, semester, year);
+                                    }}
+                                    className="flex items-center px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg
+                                             hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-sm hover:shadow-md
+                                             transform hover:-translate-y-0.5 text-xs font-medium"
+                                    title={`Faire signer la feuille de temps pour ${userGroup.userName} (${semester} ${year})`}
+                                  >
+                                    <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
+                                    Faire Signer
+                                  </button>
+                                ) : (
+                                  <button
+                                    disabled
+                                    className="flex items-center px-3 py-1.5 bg-gray-400 text-white rounded-lg cursor-not-allowed text-xs font-medium opacity-50"
+                                    title={`Toutes les entrées doivent être approuvées avant de pouvoir faire signer`}
+                                  >
+                                    <DocumentArrowDownIcon className="w-4 h-4 mr-1" />
+                                    En attente d&apos;approbation
+                                  </button>
+                                );
+                              })()}
+                            </>
                           )}
                           {isExpanded ? (
                             <ChevronDownIcon className="w-5 h-5 text-gray-400" />
@@ -1430,17 +1553,7 @@ export default function TimeEntriesPage() {
           message="Êtes-vous sûr de vouloir supprimer cette entrée de temps ? Cette action est irréversible."
         />
 
-        <GenerateTimesheetModal
-          isOpen={isGenerateTimesheetModalOpen}
-          onClose={() => {
-            setIsGenerateTimesheetModalOpen(false);
-            setSelectedUserForTimesheet(null);
-          }}
-          onGenerate={handleGenerateTimesheet}
-          userName={selectedUserForTimesheet?.name || ''}
-          activePeriod={activePeriod}
-          availablePeriods={availablePeriods}
-        />
+
       </div>
     </RoleBasedProtectedRoute>
   );

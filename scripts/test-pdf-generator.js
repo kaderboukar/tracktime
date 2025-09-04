@@ -1,19 +1,10 @@
-#!/usr/bin/env node
-
-/**
- * Script de Test de Génération PDF et Calculs de Coûts
- * 
- * Ce script teste la logique de calcul des coûts pour éviter les NaN
- * et vérifie la génération du PDF.
- */
-
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
-async function testPDFGeneration() {
+async function testPDFGenerator() {
   try {
-    console.log('🧪 Test de génération de PDF...');
+    console.log('🧪 Test du générateur PDF personnalisé...');
     
     // Données de test
     const testData = {
@@ -37,26 +28,38 @@ async function testPDFGeneration() {
           hours: 80,
           cost: 4166.67
         }
-      ]
+      ],
+      signatureInfo: {
+        signedBy: "John Doe",
+        signedAt: new Date(),
+        signatureToken: "test_token_123"
+      }
     };
     
     console.log('📊 Données de test:', testData);
     
     // Importer et tester le générateur
-    const { generateTimesheetPDF } = require('../src/lib/pdf-maker-generator.ts');
+    console.log('🔄 Import du générateur...');
+    const { generateTimesheetPDFWithPDFMaker } = require('../src/lib/pdf-maker-generator.ts');
     
-    console.log('🔄 Génération du PDF...');
-    const pdfBuffer = await generateTimesheetPDF(testData);
+    console.log('🎨 Génération du PDF...');
+    const pdfBuffer = await generateTimesheetPDFWithPDFMaker(testData);
     
     console.log('✅ PDF généré avec succès!');
     console.log('📏 Taille du PDF:', pdfBuffer.length, 'bytes');
     console.log('🔍 Type du buffer:', typeof pdfBuffer);
     console.log('📋 Buffer est Uint8Array:', pdfBuffer instanceof Uint8Array);
     
+    // Vérifier que c'est bien un PDF
+    const pdfHeader = pdfBuffer.slice(0, 4).toString();
+    console.log('📄 En-tête PDF:', pdfHeader);
+    console.log('✅ Est-ce un PDF valide?', pdfHeader === '%PDF');
+    
     return true;
     
   } catch (error) {
     console.error('❌ Erreur lors de la génération du PDF:', error);
+    console.error('Stack trace:', error.stack);
     return false;
   } finally {
     await prisma.$disconnect();
@@ -65,7 +68,7 @@ async function testPDFGeneration() {
 
 // Exécuter le test
 if (require.main === module) {
-  testPDFGeneration()
+  testPDFGenerator()
     .then(success => {
       if (success) {
         console.log('🎉 Test réussi!');
@@ -81,4 +84,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { testPDFGeneration };
+module.exports = { testPDFGenerator };
